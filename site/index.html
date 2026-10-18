@@ -22,7 +22,7 @@
         <a href="#funciones">Funciones</a>
         <a href="#comparativa">Comparativa</a>
         <a href="#ia">IA y privacidad</a>
-        <a href="#empezar">Empezar</a>
+        <a href="#descargar">Descargar</a>
         <a class="btn small" href="https://github.com/GMR027/liveproject">GitHub</a>
       </nav>
     </div>
@@ -34,7 +34,7 @@
       <h1>Guarda el archivo. <span>Míralo en todos tus dispositivos.</span></h1>
       <p class="lead">LiveProject arranca tu proyecto por ti (PHP, Laravel, Django, Flask, Node, Ruby, Go o HTML estático), lo muestra en varios dispositivos a la vez y reúne los errores del servidor, del navegador y de la red en un solo lugar.</p>
       <div class="cta">
-        <a class="btn" href="#empezar">Probarlo ahora</a>
+        <a class="btn" href="#descargar">Descargar para Linux</a>
         <a class="btn ghost" href="#comparativa">Ver la comparativa</a>
       </div>
       <figure class="shot">
@@ -159,8 +159,21 @@
       </div>
     </section>
 
+    <section id="descargar" class="wrap section">
+      <h2>Descarga LiveProject para Linux</h2>
+      <p class="sub">Paquete <code>.deb</code> para Debian, Ubuntu y derivadas (64 bits). Instálalo con un comando y se actualiza como cualquier otro paquete.</p>
+      <div class="download">
+        <div>
+          <a class="btn" id="dl-btn" href="downloads/liveproject_amd64.deb" download>Descargar .deb</a>
+          <p class="meta" id="dl-meta">Versión más reciente · amd64</p>
+        </div>
+        <div class="code"><code>sudo apt install ./liveproject_amd64.deb</code><button class="copy" type="button" data-copy="sudo apt install ./liveproject_amd64.deb">Copiar</button></div>
+      </div>
+      <p class="note">Después de instalar, abre «LiveProject» desde el menú de aplicaciones o ejecuta <code>liveproject .</code> dentro de tu proyecto. Para desinstalar: <code>sudo apt remove liveproject</code>. <span id="dl-sha"></span></p>
+    </section>
+
     <section id="empezar" class="wrap section">
-      <h2>Empieza en un minuto</h2>
+      <h2>O ejecútalo desde el código fuente</h2>
       <p class="sub">Necesitas Node.js y el runtime de tu proyecto (por ejemplo PHP o Python).</p>
       <div class="steps">
         <div class="step"><span>1</span><h3>Instala</h3><div class="code"><code>git clone https://github.com/GMR027/liveproject.git
@@ -176,7 +189,7 @@ cd liveproject/app &amp;&amp; npm install</code><button class="copy" type="butto
       <details><summary>¿Funciona con mi framework?</summary><p>Detecta Laravel, Django, Flask, proyectos Node con <code>dev</code> o <code>start</code>, Rack, Go y PHP. Para cualquier otro, define el comando en <code>.liveproject.json</code>.</p></details>
       <details><summary>¿Puedo usar un servidor que ya tengo en marcha?</summary><p>Sí. Indica su <code>url</code> en <code>.liveproject.json</code> y LiveProject se limita a mostrarlo, sin lanzar ningún proceso.</p></details>
       <details><summary>¿Tengo que usar IA?</summary><p>No. Todo lo demás funciona sin ella. Si la activas, tú decides si es local o en la nube.</p></details>
-      <details><summary>¿Qué sistemas operativos soporta?</summary><p>Hoy se empaqueta para Linux (AppImage y .deb). Al estar hecho con Electron, ejecutarlo desde el código fuente en otros sistemas es posible, pero no está probado.</p></details>
+      <details><summary>¿Qué sistemas operativos soporta?</summary><p>Hoy se distribuye como paquete .deb para Linux de 64 bits. Al estar hecho con Electron, ejecutarlo desde el código fuente en otros sistemas es posible, pero no está probado.</p></details>
       <details><summary>¿Qué se guarda en mi proyecto?</summary><p>Capturas, sesiones e informes van a la carpeta <code>.liveproject/</code> dentro del proyecto. Conviene añadirla a tu <code>.gitignore</code>.</p></details>
     </section>
   </main>

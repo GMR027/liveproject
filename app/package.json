@@ -10,7 +10,8 @@
   },
   "scripts": {
     "start": "electron .",
-    "build": "electron-builder --linux AppImage deb"
+    "build": "electron-builder --linux AppImage deb",
+    "build:deb": "electron-builder --linux deb"
   },
   "dependencies": {
     "chokidar": "^3.6.0",
@@ -29,7 +30,27 @@
     ],
     "linux": {
       "category": "Development",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "synopsis": "Vista previa en vivo multi-dispositivo",
+      "maintainer": "Edgar <e.gm27@outlook.com>",
+      "target": [
+        "deb",
+        "AppImage"
+      ]
+    },
+    "artifactName": "liveproject_${version}_${arch}.${ext}",
+    "deb": {
+      "packageName": "liveproject",
+      "priority": "optional"
     }
+  },
+  "author": {
+    "name": "Edgar",
+    "email": "e.gm27@outlook.com"
+  },
+  "homepage": "https://liveproject.iguzman.com.mx",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/GMR027/liveproject.git"
   }
 }

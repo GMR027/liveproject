@@ -3,11 +3,12 @@ const { execFile } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const DEFAULT_UPDATE_URL = 'https://liveproject.iguzman.com.mx/downloads/latest.json';
 const settingsFile = () => path.join(app.getPath('userData'), 'app.json');
 
 function loadSettings() {
-  try { return { updateUrl: '', autoCheck: false, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; }
-  catch { return { updateUrl: '', autoCheck: false }; }
+  try { return { updateUrl: DEFAULT_UPDATE_URL, autoCheck: false, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) }; }
+  catch { return { updateUrl: DEFAULT_UPDATE_URL, autoCheck: false }; }
 }
 
 function saveSettings(patch) {
