@@ -1,0 +1,9 @@
+{
+  "name": "liveproject-workspace",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "start": "npm --prefix app start --",
+    "build": "npm --prefix app run build"
+  }
+}

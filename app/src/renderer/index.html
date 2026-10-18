@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; frame-src *">
+  <title>LiveProject</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header id="toolbar">
+    <div class="brand" title="LiveProject"><span class="logo">◈</span><b>Live<span>Project</span></b></div>
+    <button id="btn-open" title="Abrir carpeta de proyecto">📂 Abrir</button>
+    <div class="proj"><span id="project-name">Sin proyecto</span><span id="status" class="status">—</span></div>
+    <input id="url" readonly>
+    <div class="btn-group">
+      <button id="btn-reload" title="Recargar vistas">⟳ Recargar</button>
+      <button id="btn-restart" title="Reiniciar servidor">⏻ Reiniciar</button>
+    </div>
+    <div class="menu">
+      <button class="menu-btn" title="Opciones de visualización">👁 Vista ▾</button>
+      <div class="menu-pop">
+        <label class="menu-item"><input type="checkbox" id="chk-sync" checked> <span>Sincronizar scroll y clics</span></label>
+        <label class="menu-item"><input type="checkbox" id="chk-fit" checked> <span>Ajustar a la pantalla</span></label>
+        <button type="button" class="menu-item" id="btn-rotate-all" title="Gira todos los teléfonos y tabletas a horizontal o vertical">⟲ <span>Girar móviles y tabletas</span></button>
+        <hr>
+        <button type="button" class="menu-item" id="btn-toggle-devbar">📱 <span>Barra de dispositivos</span></button>
+        <button type="button" class="menu-item" id="btn-toggle-perf">⚡ <span>Barra de rendimiento</span></button>
+      </div>
+    </div>
+    <div class="menu">
+      <button class="menu-btn" title="Capturas, informes y pruebas">🧰 Herramientas ▾</button>
+      <div class="menu-pop">
+        <button type="button" class="menu-item" id="btn-shot" title="Capturar todas las vistas">📷 <span>Captura de todas las vistas</span></button>
+        <button type="button" class="menu-item" id="btn-report" title="Exportar informe (HTML y Markdown)">📄 <span>Exportar informe</span></button>
+      </div>
+    </div>
+    <button id="btn-lan" title="Abrir el proyecto en el móvil, la tableta u otro equipo de la red">📡 Red local <span id="lan-count" class="badge ok-badge" hidden></span></button>
+    <div class="btn-group seg">
+      <button id="btn-msgs" class="active" title="Mostrar/ocultar paneles laterales (mensajes, red, enlaces, historial)">🗂 Paneles <span id="msg-badge" class="badge" hidden></span></button>
+      <button id="btn-panel" class="active" title="Mostrar/ocultar panel inferior">🔍 Inspector</button>
+    </div>
+    <button id="btn-help" title="Manual de usuario">📖 Ayuda</button>
+    <button id="btn-settings" title="Dispositivos, IA, tema y manual">⚙ Ajustes</button>
+  </header>
+  <section id="devbar" class="collapsible">
+    <button class="sec-toggle" id="devbar-toggle" title="Mostrar/ocultar dispositivos"><i>▾</i> Dispositivos</button>
+    <nav id="devices"></nav>
+  </section>
+
+  <div id="workspace">
+    <div id="main-col">
+      <main id="stage"><div id="empty">Abre una carpeta de proyecto o ejecuta <code>liveproject .</code> desde tu editor.</div></main>
+      <div id="perfwrap" class="collapsible">
+        <button class="sec-toggle" id="perf-toggle" title="Mostrar/ocultar rendimiento"><i>▾</i> ⚡ Rendimiento</button>
+        <div id="perfbar"></div>
+      </div>
+    </div>
+    <div id="side-splitter" title="Arrastra para cambiar el ancho"></div>
+    <aside id="messages">
+      <div class="side-tabs">
+        <button class="stab2 active" data-side="messages">💬 Mensajes</button>
+        <button class="stab2" data-side="net">🌐 Red <span id="net-badge" class="badge" hidden></span></button>
+        <button class="stab2" data-side="links">🔗 Enlaces <span id="links-badge" class="badge" hidden></span></button>
+        <button class="stab2" data-side="history">🕘 Historial</button>
+      </div>
+
+      <section id="side-messages" class="side-pane">
+        <div class="side-head">
+          <b>Mensajes</b><span id="msg-count" class="muted"></span><span class="spacer"></span>
+          <select id="msg-sev"><option value="all">Todos</option><option value="error">Errores</option><option value="warning">Avisos</option><option value="notice">Notas</option></select>
+          <button id="msg-clear">Limpiar</button>
+        </div>
+        <label class="msg-auto muted" title="Con IA local, los errores nuevos se explican solos (máx. 20 por sesión)"><input type="checkbox" id="msg-auto"> Explicar errores automáticamente (IA local)</label>
+        <div id="msg-langs"></div>
+        <div id="msg-list"></div>
+      </section>
+
+      <section id="side-net" class="side-pane" hidden>
+        <div class="side-head">
+          <input id="net-search" type="text" placeholder="Filtrar URL o vista…" spellcheck="false">
+          <select id="net-type"></select>
+          <button id="net-clear">Limpiar</button>
+        </div>
+        <div class="net-opts muted">
+          <label class="check"><input type="checkbox" id="net-fail"> Solo fallos</label>
+          <label class="check"><input type="checkbox" id="net-keep"> Conservar al recargar</label>
+          <span id="net-summary"></span>
+        </div>
+        <div id="net-list" class="side-list"></div>
+      </section>
+
+      <section id="side-links" class="side-pane" hidden>
+        <div class="side-head">
+          <button id="links-run" class="primary">🔗 Comprobar</button>
+          <select id="links-filter"><option value="all">Problemas</option><option value="ok">Correctos</option></select>
+          <span id="links-status" class="muted"></span>
+        </div>
+        <div id="links-list" class="side-list"></div>
+      </section>
+
+      <section id="side-history" class="side-pane" hidden>
+        <div class="side-head">
+          <b>Sesiones</b><span class="spacer"></span>
+          <button id="hist-refresh" title="Actualizar lista">⟳</button>
+          <button id="hist-report" title="Exportar informe de la sesión actual">📄 Exportar informe</button>
+        </div>
+        <div id="hist-list" class="side-list"></div>
+      </section>
+    </aside>
+  </div>
+
+  <div id="splitter" title="Arrastra para cambiar el tamaño"></div>
+  <section id="bottom">
+    <div id="bottom-bar">
+      <button class="tab active" data-tab="smart">✨ Inspector inteligente</button>
+      <button class="tab" data-tab="devtools">DevTools</button>
+      <button class="tab" data-tab="csslint">📐 CSS responsive <span id="csl-badge" class="badge" hidden></span></button>
+      <button class="tab" data-tab="logs">Servidor</button>
+      <span class="spacer"></span>
+      <label class="check" id="target-label">Dispositivo <select id="inspect-target"></select></label>
+      <button id="btn-close-panel" title="Cerrar panel">✕</button>
+    </div>
+    <div id="tab-smart" class="pane">
+      <div class="smart-bar">
+        <button id="smart-analyze">⟳ Analizar</button>
+        <button id="smart-pick">🎯 Elegir en la página</button>
+        <label class="check"><input type="checkbox" id="smart-auto" checked> Analizar al recargar</label>
+        <span id="smart-status" class="muted"></span>
+        <span class="legend"><i style="background:#6c8cff"></i>estructura <i style="background:#4cc38a"></i>texto <i style="background:#f59e0b"></i>medios <i style="background:#c084fc"></i>formularios</span>
+      </div>
+      <div class="smart-cols">
+        <div id="smart-tree"></div>
+        <div id="smart-detail"><div class="hint">Selecciona un elemento del árbol o usa «Elegir en la página».</div></div>
+        <div id="smart-summary"></div>
+      </div>
+    </div>
+    <div id="tab-inspector" class="pane" hidden><div class="hint">DevTools se activa cuando carga una vista.</div></div>
+    <div id="tab-csslint" class="pane" hidden>
+      <div class="smart-bar">
+        <button id="csl-run" class="primary">▶ Analizar dispositivos activos</button>
+        <button id="csl-ai" title="Prioriza los hallazgos y propone el CSS corregido">💡 Revisión con IA</button>
+        <span id="csl-status" class="muted"></span>
+      </div>
+      <div id="csl-body"><div id="csl-ai-out" class="msg-ai" hidden></div><div id="csl-list"></div></div>
+    </div>
+    <div id="tab-logs" class="pane" hidden><pre id="log-out"></pre></div>
+  </section>
+
+  <dialog id="settings">
+    <button type="button" id="btn-x" class="dlg-x" title="Cerrar (Esc)">✕</button>
+    <form method="dialog" id="settings-form">
+      <div class="set-tabs">
+        <button type="button" class="stab active" data-stab="devices">📱 Dispositivos</button>
+        <button type="button" class="stab" data-stab="ai">🤖 Inteligencia artificial <span id="ai-dot" class="dot"></span></button>
+        <button type="button" class="stab" data-stab="theme">🎨 Tema</button>
+        <button type="button" class="stab" data-stab="app">🛠 Aplicación</button>
+        <button type="button" class="stab" data-stab="manual">📖 Manual</button>
+      </div>
+
+      <section id="set-devices">
+        <p class="muted">Define los tamaños de pantalla para el diseño responsivo y marca los que quieres ver. Los tamaños son viewport en píxeles CSS.</p>
+        <div id="dev-rows"></div>
+        <div class="row-actions">
+          <button type="button" id="btn-add-dev">＋ Dispositivo</button>
+          <select id="preset-select"><option value="">Añadir preset…</option></select>
+          <button type="button" id="btn-reset-dev" title="Restaurar lista por defecto">Restaurar</button>
+        </div>
+      </section>
+
+      <section id="set-ai" hidden>
+        <p class="muted">Conecta una IA para explicar errores y sugerir mejoras. Elige local (gratis y privada), API (de pago por uso) o la CLI de tu suscripción.</p>
+        <div class="ai-grid">
+          <label>Proveedor <select id="ai-provider"></select></label>
+          <label id="ai-base-l">URL base <input type="text" id="ai-base" spellcheck="false"></label>
+          <label id="ai-key-l">Clave de API <input type="password" id="ai-key" autocomplete="off" spellcheck="false"></label>
+          <label id="ai-model-l">Modelo <input type="text" id="ai-model" list="ai-models" spellcheck="false" placeholder="p. ej. qwen2.5-coder:7b"><datalist id="ai-models"></datalist></label>
+        </div>
+        <p id="ai-hint" class="muted"></p>
+        <div class="conn-box"><span id="ai-conn-dot" class="dot conn-off"></span><div><b id="ai-conn-title">Sin conectar</b><small id="ai-conn-sub"></small></div></div>
+        <div class="row-actions">
+          <button type="button" id="ai-connect" class="primary">🔌 Conectar</button>
+          <button type="button" id="ai-test">✔ Comprobar conexión</button>
+          <button type="button" id="ai-disconnect">Desconectar</button>
+          <span id="ai-status" class="ai-status"></span>
+        </div>
+        <h4>Modelos de IA <span id="ai-model-count" class="muted"></span></h4>
+        <div class="model-tools">
+          <input type="text" id="ai-model-filter" placeholder="Buscar modelo…" spellcheck="false">
+          <button type="button" id="ai-model-refresh" title="Volver a buscar los modelos instalados">⟳ Actualizar</button>
+        </div>
+        <div id="ai-model-list"><div class="model-empty">Pulsa «Comprobar conexión» para listar los modelos.</div></div>
+        <h4>Modelos recomendados</h4>
+        <div id="ai-reco" class="muted">—</div>
+      </section>
+
+      <section id="set-theme" hidden>
+        <p class="muted">Aspecto de la interfaz de LiveProject (no afecta a las páginas de tu proyecto).</p>
+        <div class="theme-modes">
+          <button type="button" data-mode="dark">🌙 Oscuro</button>
+          <button type="button" data-mode="light">☀️ Claro</button>
+          <button type="button" data-mode="auto">💻 Sistema</button>
+        </div>
+        <h4>Color de acento</h4>
+        <div class="theme-swatches" id="theme-swatches"></div>
+        <h4>Tamaño de la interfaz</h4>
+        <label class="check"><input type="range" id="theme-zoom" min="80" max="140" step="5"> <span id="theme-zoom-v">100%</span></label>
+        <div class="row-actions"><button type="button" id="theme-reset">Restaurar tema</button></div>
+      </section>
+
+      <section id="set-app" hidden>
+        <div class="card">
+          <h4>⬆ Actualizaciones</h4>
+          <div>Versión instalada: <b id="app-version">—</b> <span class="muted" id="app-kind"></span></div>
+          <input type="text" id="upd-url" class="upd-url" spellcheck="false" placeholder="URL de actualizaciones (JSON con «version» y «url», o API de GitHub Releases)">
+          <label class="check"><input type="checkbox" id="upd-auto"> Buscar al iniciar</label>
+          <div class="row-actions">
+            <button type="button" id="upd-check" class="primary">Buscar actualizaciones</button>
+            <button type="button" id="upd-open" hidden>Abrir descarga</button>
+            <span id="upd-status" class="ai-status"></span>
+          </div>
+        </div>
+        <div class="card danger">
+          <h4>🗑 Desinstalar</h4>
+          <p class="muted" id="uninst-info"></p>
+          <label class="check"><input type="checkbox" id="uninst-data"> Borrar también mis ajustes, claves de IA y dispositivos</label>
+          <div class="row-actions"><button type="button" id="uninst-btn" class="danger">Desinstalar LiveProject</button></div>
+        </div>
+      </section>
+
+      <section id="set-manual" hidden>
+        <div class="man-bar">
+          <input type="text" id="man-search" placeholder="🔎 Buscar en el manual…" spellcheck="false">
+          <button type="button" id="man-open">Expandir todo</button>
+          <button type="button" id="man-close">Contraer todo</button>
+        </div>
+        <div id="man-body">
+          <p class="man-intro"><b>LiveProject</b> muestra tu proyecto web en varios dispositivos a la vez (móvil, tableta, portátil, monitor), lo recarga al guardar y reúne en un solo lugar los errores, las peticiones de red, los enlaces rotos y los problemas de CSS responsive. Funciona con <b>cualquier backend</b>: PHP, Laravel, Django, Flask, Node, Ruby, Go o sitios estáticos.</p>
+
+          <details open><summary>🚀 Primeros pasos</summary>
+            <ol>
+              <li>Pulsa <b>📂 Abrir</b> y elige la carpeta de tu proyecto (o ejecuta <code>liveproject .</code> en la terminal).</li>
+              <li>LiveProject detecta el servidor (<code>php -S</code>, <code>artisan serve</code>, <code>manage.py runserver</code>, Flask, <code>npm run dev</code>, Rack, Go…) y lo arranca. El indicador junto al nombre pasa de <span class="pill warn">iniciando…</span> a <span class="pill good">activo</span>.</li>
+              <li>Tu página aparece dentro de los dispositivos. Edita y guarda un archivo: todas las vistas se recargan solas.</li>
+              <li>Si el proyecto ya tiene servidor (XAMPP, Docker…), indica su dirección con <code>"url"</code> en <code>.liveproject.json</code> y no se lanzará ningún proceso.</li>
+            </ol>
+          </details>
+
+          <details><summary>🧭 Recorrido por la interfaz</summary>
+            <ul>
+              <li><b>Barra superior</b>: abrir proyecto, estado del servidor, dirección, <b>⟳ Recargar</b> y <b>⏻ Reiniciar</b> el servidor, y los menús <b>👁 Vista</b> y <b>🧰 Herramientas</b>.</li>
+              <li><b>Barra de dispositivos</b>: botones para activar o desactivar cada pantalla. Se pliega con el título <i>Dispositivos</i>.</li>
+              <li><b>Escenario</b>: el centro, donde viven los dispositivos. Si no caben, desplázate horizontalmente.</li>
+              <li><b>Barra de rendimiento</b> (bajo el escenario): puntuación y métricas de carga por dispositivo. Plegable.</li>
+              <li><b>🗂 Paneles</b> (derecha): Mensajes, Red, Enlaces e Historial. Arrastra el separador para cambiar el ancho.</li>
+              <li><b>🔍 Inspector</b> (abajo): Inspector inteligente, DevTools, CSS responsive y registro del servidor. Arrastra el separador para cambiar la altura.</li>
+              <li><b>⚙ Ajustes</b>: dispositivos, IA, tema, aplicación y este manual.</li>
+            </ul>
+            <p class="muted">Cada panel se abre y se cierra desde su botón; la app recuerda el ancho del panel lateral y qué secciones plegaste.</p>
+          </details>
+
+          <details><summary>📱 Dispositivos y rotación (vertical / horizontal)</summary>
+            <ul>
+              <li>Activa o desactiva dispositivos en la barra de dispositivos. En <b>Ajustes → Dispositivos</b> puedes añadir, renombrar, cambiar medidas o elegir entre los presets 2025-2026 (iPhone 17, Galaxy S26, Pixel 10, iPad Pro, MacBook, monitores 2K/4K…).</li>
+              <li>Cada <b>teléfono</b> y <b>tableta</b> tiene un botón <b>⟲ Girar</b> en su título: pulsa para verlo en <b>horizontal</b> y vuelve a pulsar para regresar a vertical. El ancho y el alto se intercambian, así que las media queries y <code>orientation</code> reaccionan como en un aparato real.</li>
+              <li>Para girarlos todos a la vez: <b>👁 Vista → ⟲ Girar móviles y tabletas</b>.</li>
+              <li>La orientación se conserva al recargar y al cambiar otras opciones de dispositivos.</li>
+              <li><b>Ajustar a la pantalla</b>: reduce cada dispositivo para que quepa en la altura disponible (muestra el % de escala). Si lo desactivas, ves el tamaño real con desplazamiento.</li>
+              <li><b>Sincronizar</b>: el scroll y los clics de una vista se repiten en las demás.</li>
+            </ul>
+          </details>
+
+          <details><summary>⚙️ Servidor y archivo <code>.liveproject.json</code></summary>
+            <p>Crea este archivo en la raíz del proyecto para personalizar el comportamiento:</p>
+            <pre>{
+  "command": "python3 -m http.server {port}",
+  "port": 8000,
+  "url": "http://localhost:8080",
+  "path": "/",
+  "ignore": ["logs"],
+  "delay": 0
+}</pre>
+            <ul>
+              <li><code>command</code>: comando que arranca el servidor. Admite <code>{port}</code> y <code>{root}</code>.</li>
+              <li><code>url</code>: usa un servidor que ya está en marcha, sin lanzar nada.</li>
+              <li><code>path</code>: ruta que se abre al inicio. <code>ignore</code>: carpetas que no provocan recarga. <code>delay</code>: espera (ms) antes de recargar.</li>
+            </ul>
+            <p class="muted">Capturas, sesiones e informes se guardan en <code>&lt;proyecto&gt;/.liveproject/</code>; añádelo a tu <code>.gitignore</code>. La pestaña <b>Servidor</b> del panel inferior muestra la salida del proceso.</p>
+          </details>
+
+          <details><summary>✨ Inspector inteligente</summary>
+            <ul>
+              <li>Árbol del DOM con barras de tamaño: las <span class="pill bad">rojas</span> indican elementos que desbordan el ancho de la pantalla.</li>
+              <li>Selecciona un nodo para ver su <b>modelo de caja</b>, estilos calculados y fragmento HTML.</li>
+              <li><b>🎯 Elegir en la página</b>: haz clic en la vista y se selecciona el elemento. Al pasar el ratón por el árbol, se resalta en la página.</li>
+              <li>A la derecha, un resumen: problemas de accesibilidad, responsive y contraste, paleta de colores y esquema de encabezados.</li>
+              <li>Con <b>Analizar al recargar</b> se actualiza solo. Elige el dispositivo a inspeccionar en el selector <i>Dispositivo</i>.</li>
+            </ul>
+          </details>
+
+          <details><summary>🛠 DevTools y 📐 CSS responsive</summary>
+            <ul>
+              <li><b>DevTools</b>: las herramientas reales de Chromium (Elements, Console, Sources, Network…) acopladas al dispositivo elegido.</li>
+              <li><b>CSS responsive</b>: pulsa <b>▶ Analizar dispositivos activos</b> y se revisa cada pantalla con su tamaño real: desbordes, anchos fijos, objetivos táctiles pequeños, tipografía, imágenes, <code>100vh</code>, media queries… Cada hallazgo propone una corrección y, al pulsarlo, resalta el elemento en la página.</li>
+              <li>Con IA conectada aparecen <b>Corregir con IA</b> y <b>💡 Revisión con IA</b>, que prioriza los problemas y propone el CSS corregido.</li>
+            </ul>
+          </details>
+
+          <details><summary>💬 Panel de Mensajes</summary>
+            <ul>
+              <li>Reúne errores y avisos de <b>PHP, Python, Node, Ruby, Go, Java, C#, SQL, HTTP y JavaScript</b>, tanto de la salida del servidor como los impresos en la propia página.</li>
+              <li>Cada mensaje lleva etiqueta de lenguaje y color por gravedad (rojo error, ámbar aviso, azul nota). Los repetidos se agrupan con un contador.</li>
+              <li>Filtra por gravedad o por lenguaje (clic en la etiqueta). Pulsa el título para ver el detalle completo.</li>
+              <li>Con IA conectada, <b>💡 Explicar con IA</b> te dice la causa y la solución. La casilla <i>Explicar errores automáticamente</i> lo hace sola con IA local (máx. 20 por sesión).</li>
+            </ul>
+          </details>
+
+          <details><summary>🌐 Panel de Red</summary>
+            <ul>
+              <li>Todas las peticiones de cada vista: método, estado, tipo, tamaño, tiempo y cabeceras clave. Pulsa una fila para ver el detalle.</li>
+              <li>Filtra por tipo o texto de URL, o activa <b>Solo fallos</b>. Los 4xx/5xx y los fallos de red se añaden también a <i>Mensajes</i>.</li>
+              <li><b>Conservar al recargar</b> mantiene el historial entre recargas.</li>
+            </ul>
+          </details>
+
+          <details><summary>🔗 Panel de Enlaces</summary>
+            <p>Pulsa <b>🔗 Comprobar</b> para validar enlaces, imágenes, scripts, estilos, iframes y medios (HEAD/GET). Detecta además anclajes <code>#id</code> inexistentes, contenido mixto http/https y redirecciones. Cambia el filtro entre <i>Problemas</i> y <i>Correctos</i>.</p>
+          </details>
+
+          <details><summary>🕘 Historial e 📄 informes</summary>
+            <ul>
+              <li>Cada sesión se guarda sola en <code>.liveproject/sessions/</code> (las últimas 50). Puedes reabrirlas o borrarlas desde <b>Historial</b>.</li>
+              <li><b>🧰 Herramientas → 📄 Exportar informe</b> genera un HTML y un Markdown en <code>.liveproject/reports/</code> con errores, red, enlaces, CSS responsive y rendimiento.</li>
+              <li><b>📷 Captura</b> guarda una imagen de cada vista en <code>.liveproject/screenshots/</code>.</li>
+            </ul>
+          </details>
+
+          <details><summary>⚡ Barra de rendimiento</summary>
+            <p>Mide TTFB, FCP, LCP, CLS, TBT, tiempo de carga, peso, peticiones, nodos del DOM y memoria con los umbrales de Google (Lighthouse). Muestra una nota global por dispositivo; pulsa un dispositivo para inspeccionarlo. Pliégala con el título <i>Rendimiento</i> si necesitas más espacio.</p>
+          </details>
+
+          <details><summary>📡 Red local (móvil real, tableta y otros equipos)</summary>
+            <ol>
+              <li>Pulsa <b>📡 Red local</b> y activa el acceso. Se crea un proxy (puerto 4777 o uno libre).</li>
+              <li>Escanea el <b>código QR</b> con el móvil o escribe la URL en otro equipo de la <b>misma red</b>.</li>
+              <li>Los dispositivos se recargan al guardar, funcionan con HMR/WebSocket y sus errores de JavaScript llegan al panel <i>Mensajes</i>.</li>
+            </ol>
+            <p class="muted">Mientras está activo, cualquier equipo de la red puede ver tu proyecto. Si no conecta, abre el puerto en el cortafuegos. Desactívalo cuando termines.</p>
+          </details>
+
+          <details><summary>🤖 Inteligencia artificial</summary>
+            <ul>
+              <li><b>Local</b> (Ollama, LM Studio): gratis y privado; nada sale de tu equipo.</li>
+              <li><b>API</b> (Anthropic, OpenAI, Gemini): de pago por uso; pega tu clave de API.</li>
+              <li><b>Suscripción</b>: usa la CLI oficial de Claude Code, Codex o Gemini CLI.</li>
+              <li>En <b>Ajustes → Inteligencia artificial</b> elige proveedor, pulsa <b>🔌 Conectar</b> y selecciona un modelo de la lista. El punto de color indica el estado: verde conectado, rojo error, ámbar comprobando, gris sin conectar.</li>
+              <li>Las sugerencias se ajustan a la RAM de tu equipo. En local, el servidor (p. ej. <code>ollama serve</code>) debe estar en marcha.</li>
+            </ul>
+          </details>
+
+          <details><summary>🎨 Tema y apariencia</summary>
+            <p>En <b>Ajustes → Tema</b> elige modo <b>Oscuro</b>, <b>Claro</b> o <b>Sistema</b>, un <b>color de acento</b> (paleta o selector libre) y el <b>tamaño de la interfaz</b> (80 %–140 %). Solo afecta a LiveProject, no a tus páginas.</p>
+          </details>
+
+          <details><summary>🛠 Actualizaciones y desinstalación</summary>
+            <ul>
+              <li><b>Ajustes → Aplicación</b>: indica la URL de actualizaciones (JSON con <code>version</code> y <code>url</code>, o la API de GitHub Releases) y pulsa <b>Buscar actualizaciones</b>. Puedes activar la búsqueda al iniciar.</li>
+              <li><b>Desinstalar</b> elimina el AppImage o el paquete .deb (pide contraseña). Marca la casilla si quieres borrar también tus ajustes y claves.</li>
+            </ul>
+          </details>
+
+          <details><summary>🩺 Solución de problemas</summary>
+            <ul>
+              <li><b>Estado «sin respuesta»</b>: el servidor no arrancó. Revisa la pestaña <i>Servidor</i>, el comando de <code>.liveproject.json</code> y que el puerto esté libre. Prueba <b>⏻ Reiniciar</b>.</li>
+              <li><b>No recarga al guardar</b>: comprueba que la carpeta no esté en <code>ignore</code> y que el servidor no use caché agresiva.</li>
+              <li><b>El móvil real no conecta</b>: debe estar en la misma red; abre el puerto 4777 en el cortafuegos.</li>
+              <li><b>La IA no responde</b>: pulsa <i>Comprobar conexión</i>; en local verifica que Ollama/LM Studio estén en ejecución y el modelo instalado.</li>
+              <li><b>Los dispositivos no caben</b>: activa <i>Ajustar a la pantalla</i>, cierra paneles o baja el tamaño de la interfaz en Tema.</li>
+              <li><b>Texto muy pequeño o grande</b>: Ajustes → Tema → Tamaño de la interfaz.</li>
+            </ul>
+          </details>
+
+          <p class="man-foot muted">LiveProject <span id="man-version"></span> · Manual de usuario</p>
+        </div>
+      </section>
+
+      <div class="row-actions dlg-foot">
+        <span class="spacer"></span>
+        <button type="button" id="btn-cancel">Cerrar</button>
+        <button type="submit" id="btn-save" class="primary" value="save">Guardar dispositivos</button>
+      </div>
+    </form>
+  </dialog>
+  <dialog id="lan">
+    <button type="button" id="lan-x" class="dlg-x" title="Cerrar (Esc)">✕</button>
+    <h3 class="lan-title">📡 Probar en otros dispositivos</h3>
+    <div id="lan-body"></div>
+    <div class="row-actions dlg-foot"><button type="button" id="lan-toggle" class="primary"></button></div>
+  </dialog>
+  <div id="toast" hidden></div>
+  <script src="vendor/qrcode.js"></script>
+  <script src="messages.js"></script>
+  <script src="net.js"></script>
+  <script src="links.js"></script>
+  <script src="csslint.js"></script>
+  <script src="sessions.js"></script>
+  <script src="report.js"></script>
+  <script src="lanui.js"></script>
+  <script src="smart.js"></script>
+  <script src="perf.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

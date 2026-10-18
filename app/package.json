@@ -1,0 +1,35 @@
+{
+  "name": "liveproject",
+  "productName": "LiveProject",
+  "version": "0.1.0",
+  "description": "Vista previa en vivo multi-dispositivo para proyectos con cualquier backend (PHP, Python, Node, ...)",
+  "main": "src/main/main.js",
+  "desktopName": "liveproject.desktop",
+  "bin": {
+    "liveproject": "bin/liveproject.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --linux AppImage deb"
+  },
+  "dependencies": {
+    "chokidar": "^3.6.0",
+    "qrcode-generator": "^1.4.4"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  },
+  "build": {
+    "appId": "dev.liveproject.app",
+    "files": [
+      "src/**/*",
+      "bin/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "category": "Development",
+      "icon": "build/icon.png"
+    }
+  }
+}

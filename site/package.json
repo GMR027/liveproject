@@ -1,0 +1,10 @@
+{
+  "name": "liveproject-site",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Web de presentación de LiveProject (sitio estático)",
+  "scripts": {
+    "dev": "node serve.js",
+    "docker:build": "docker build -t liveproject-site ."
+  }
+}

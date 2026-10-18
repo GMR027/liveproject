@@ -1,0 +1,5 @@
+node_modules/
+.liveproject/
+dist/
+*.log
+.DS_Store

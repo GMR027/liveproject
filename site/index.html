@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>LiveProject · Vista previa en vivo para cualquier backend</title>
+  <meta name="description" content="LiveProject arranca tu proyecto (PHP, Laravel, Django, Flask, Node, Go…), lo muestra en varios dispositivos a la vez, recarga al guardar y te explica los errores, incluso con IA local.">
+  <meta property="og:title" content="LiveProject · Vista previa en vivo para cualquier backend">
+  <meta property="og:description" content="Varios dispositivos, errores del servidor y del navegador en un panel, y IA opcional que funciona en local.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="assets/app-overview.webp">
+  <meta name="theme-color" content="#14141b">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <a class="skip" href="#contenido">Saltar al contenido</a>
+  <header class="top">
+    <div class="wrap bar">
+      <a class="brand" href="#" aria-label="LiveProject, inicio"><img src="assets/favicon.svg" alt="" width="28" height="28"> LiveProject</a>
+      <nav aria-label="Principal">
+        <a href="#funciones">Funciones</a>
+        <a href="#comparativa">Comparativa</a>
+        <a href="#ia">IA y privacidad</a>
+        <a href="#empezar">Empezar</a>
+        <a class="btn small" href="https://github.com/GMR027/liveproject">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="contenido">
+    <section class="hero wrap">
+      <p class="eyebrow">Vista previa en vivo · cualquier backend</p>
+      <h1>Guarda el archivo. <span>Míralo en todos tus dispositivos.</span></h1>
+      <p class="lead">LiveProject arranca tu proyecto por ti (PHP, Laravel, Django, Flask, Node, Ruby, Go o HTML estático), lo muestra en varios dispositivos a la vez y reúne los errores del servidor, del navegador y de la red en un solo lugar.</p>
+      <div class="cta">
+        <a class="btn" href="#empezar">Probarlo ahora</a>
+        <a class="btn ghost" href="#comparativa">Ver la comparativa</a>
+      </div>
+      <figure class="shot">
+        <img src="assets/app-overview.webp" width="1500" height="900" alt="LiveProject mostrando un mismo proyecto en iPhone, iPad y portátil, con el panel de mensajes, la barra de rendimiento y el inspector">
+      </figure>
+    </section>
+
+    <section class="strip" aria-label="Resumen">
+      <div class="wrap strip-in">
+        <div><b>0</b><span>configuración para los frameworks habituales</span></div>
+        <div><b>8+</b><span>lenguajes cuyos errores entiende</span></div>
+        <div><b>1</b><span>ventana para vistas, red, enlaces y rendimiento</span></div>
+        <div><b>Gratis</b><span>sin suscripción ni cuenta</span></div>
+      </div>
+    </section>
+
+    <section id="funciones" class="wrap section">
+      <h2>Lo que hace diferente a LiveProject</h2>
+      <p class="sub">La mayoría de herramientas se quedan en el navegador. LiveProject mira también lo que pasa detrás.</p>
+      <div class="grid">
+        <article class="card">
+          <h3>Arranca tu servidor solo</h3>
+          <p>Detecta <code>artisan</code>, <code>manage.py</code>, Flask, <code>npm run dev</code>, Rack, Go o PHP, elige un puerto libre y lo lanza. Con un <code>.liveproject.json</code> puedes personalizar el comando o apuntar a un servidor que ya tengas (XAMPP, Docker…).</p>
+        </article>
+        <article class="card">
+          <h3>Varios dispositivos a la vez</h3>
+          <p>Teléfono, tableta, portátil y monitor lado a lado, con presets actuales y tamaños propios. El scroll y los clics se sincronizan entre vistas, y puedes rotar o ampliar cada una.</p>
+        </article>
+        <article class="card">
+          <h3>Errores de todo el stack</h3>
+          <p>Lee la salida de tu servidor y la propia página: PHP, Python, Node, Ruby, Go, Java, C#, SQL, HTTP y JavaScript, con etiqueta de lenguaje, color por gravedad y trazas agrupadas.</p>
+        </article>
+        <article class="card">
+          <h3>Explica el error, no solo lo muestra</h3>
+          <p>Un clic y la IA que elijas propone la causa probable y cómo arreglarlo. Con IA local puede hacerlo sola para cada error nuevo, sin coste.</p>
+        </article>
+        <article class="card">
+          <h3>Probar en un móvil real</h3>
+          <p>Un proxy en tu red local te da una URL y un código QR. El móvil se recarga al guardar y sus errores de JavaScript llegan al mismo panel de mensajes.</p>
+        </article>
+        <article class="card">
+          <h3>Auditoría mientras trabajas</h3>
+          <p>Inspector con árbol del DOM y desbordes, linter de CSS responsive con el viewport real de cada dispositivo, comprobador de enlaces rotos y barra de rendimiento con Core Web Vitals.</p>
+        </article>
+        <article class="card">
+          <h3>Red y DevTools reales</h3>
+          <p>Todas las peticiones de cada vista, con filtros y fallos destacados, y las DevTools de Chromium completas cuando necesitas ir más a fondo.</p>
+        </article>
+        <article class="card">
+          <h3>Historial e informes</h3>
+          <p>Cada sesión se guarda sola con sus errores. Exporta un informe en HTML y Markdown con mensajes, red, enlaces, CSS y rendimiento para compartirlo con el equipo.</p>
+        </article>
+      </div>
+    </section>
+
+    <section class="wrap section split">
+      <div>
+        <h2>Los errores del servidor y del navegador, juntos</h2>
+        <p>Un fallo de PHP, un <code>Traceback</code> de Python y un <code>console.error</code> del navegador acaban en la misma lista, con el dispositivo donde ocurrió. El mismo error visto desde varias vistas se cuenta una vez.</p>
+        <ul class="ticks">
+          <li>Trazas de varias líneas unidas en un solo mensaje</li>
+          <li>Filtros por lenguaje y gravedad</li>
+          <li>Peticiones 4xx/5xx y fallos de red añadidos automáticamente</li>
+        </ul>
+      </div>
+      <figure class="shot">
+        <img src="assets/app-messages.webp" width="1500" height="900" loading="lazy" alt="Panel de mensajes con errores de HTTP, JavaScript y PHP, y el linter de CSS responsive con sus hallazgos">
+      </figure>
+    </section>
+
+    <section id="comparativa" class="wrap section">
+      <h2>Comparativa con otras herramientas</h2>
+      <p class="sub">Datos de la documentación pública de cada herramienta, consultada en octubre de 2026. Marcamos solo lo que figura en ella.</p>
+      <div class="table-wrap" role="region" aria-label="Tabla comparativa" tabindex="0">
+        <table>
+          <caption class="sr">Comparativa de funciones entre LiveProject, Responsively App, Polypane, BrowserSync y Chrome DevTools</caption>
+          <thead>
+            <tr><th scope="col">Función</th><th scope="col" class="us">LiveProject</th><th scope="col">Responsively App</th><th scope="col">Polypane</th><th scope="col">BrowserSync</th><th scope="col">Chrome DevTools</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Varias vistas de dispositivo a la vez</th><td class="us y">Sí</td><td class="y">Sí</td><td class="y">Sí</td><td class="n">No</td><td class="n">No</td></tr>
+            <tr><th scope="row">Interacción sincronizada entre vistas</th><td class="us y">Sí</td><td class="y">Sí</td><td class="y">Sí</td><td class="y">Sí</td><td class="n">No</td></tr>
+            <tr><th scope="row">Recarga al guardar</th><td class="us y">Sí</td><td class="y">Sí</td><td class="y">Sí</td><td class="y">Sí</td><td class="n">No</td></tr>
+            <tr><th scope="row">Arranca el servidor de tu proyecto</th><td class="us y">Sí</td><td class="n">No</td><td class="n">No</td><td class="p">Solo estático</td><td class="n">No</td></tr>
+            <tr><th scope="row">Errores del servidor (PHP, Python…) en un panel</th><td class="us y">Sí</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="n">No</td></tr>
+            <tr><th scope="row">Explicación de errores con IA</th><td class="us y">Sí, local o en la nube</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="p">Asistente de Chrome</td></tr>
+            <tr><th scope="row">Móvil real por red local</th><td class="us y">Sí, con QR</td><td class="n">No</td><td class="n">No</td><td class="y">Sí</td><td class="n">No</td></tr>
+            <tr><th scope="row">Comprobador de enlaces rotos</th><td class="us y">Sí</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="n">No</td></tr>
+            <tr><th scope="row">Informe exportable (HTML y Markdown)</th><td class="us y">Sí</td><td class="n">No</td><td class="n">No</td><td class="n">No</td><td class="n">No</td></tr>
+            <tr><th scope="row">Precio</th><td class="us y">Gratis</td><td>Gratis y open source</td><td>Suscripción</td><td>Gratis</td><td>Incluido en Chrome</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="note">«No» significa que no aparece en la documentación consultada. Si encuentras un dato desactualizado, <a href="https://github.com/GMR027/liveproject/issues">avísanos</a>.</p>
+
+      <h3 class="honest">Dónde otras herramientas son mejores</h3>
+      <div class="grid two">
+        <article class="card"><h4>Polypane</h4><p>Es más amplia en accesibilidad: declara más de 80 pruebas y más de 25 herramientas de depuración. Si tu foco es auditoría de accesibilidad profunda, es una gran opción.</p></article>
+        <article class="card"><h4>Responsively App</h4><p>Es open source (AGPL-3.0) y tiene instaladores para macOS, Windows y Linux. LiveProject, por ahora, se empaqueta solo para Linux.</p></article>
+        <article class="card"><h4>BrowserSync</h4><p>Sincroniza navegadores reales y se integra en cualquier flujo de build de Node, sin una aplicación de escritorio.</p></article>
+        <article class="card"><h4>Chrome DevTools</h4><p>Ya está instalado y es la referencia. LiveProject incluye las DevTools de Chromium para no renunciar a ellas.</p></article>
+      </div>
+    </section>
+
+    <section id="ia" class="wrap section split rev">
+      <div>
+        <h2>IA que tú controlas</h2>
+        <p>La IA es opcional y la eliges tú. Con Ollama o LM Studio, el código y los errores no salen de tu equipo y no pagas por uso. Si prefieres calidad máxima, conecta la API de Anthropic, OpenAI o Gemini, o usa la CLI de tu suscripción (Claude Code, Codex o Gemini CLI).</p>
+        <ul class="ticks">
+          <li>Sugerencias de modelo según la RAM de tu equipo</li>
+          <li>Comprobación de la conexión y lista de modelos disponibles</li>
+          <li>Las claves se cifran con el almacén de secretos del sistema cuando está disponible</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <p class="pill">Local</p>
+        <p>Ollama · LM Studio · servidor compatible con OpenAI</p>
+        <p class="pill">API</p>
+        <p>Anthropic · OpenAI · Google Gemini</p>
+        <p class="pill">Suscripción</p>
+        <p>Claude Code · Codex CLI · Gemini CLI</p>
+      </div>
+    </section>
+
+    <section id="empezar" class="wrap section">
+      <h2>Empieza en un minuto</h2>
+      <p class="sub">Necesitas Node.js y el runtime de tu proyecto (por ejemplo PHP o Python).</p>
+      <div class="steps">
+        <div class="step"><span>1</span><h3>Instala</h3><div class="code"><code>git clone https://github.com/GMR027/liveproject.git
+cd liveproject/app &amp;&amp; npm install</code><button class="copy" type="button" data-copy="git clone https://github.com/GMR027/liveproject.git&#10;cd liveproject/app && npm install">Copiar</button></div></div>
+        <div class="step"><span>2</span><h3>Ábrelo sobre tu proyecto</h3><div class="code"><code>npm start -- /ruta/al/proyecto</code><button class="copy" type="button" data-copy="npm start -- /ruta/al/proyecto">Copiar</button></div></div>
+        <div class="step"><span>3</span><h3>Guarda y mira</h3><p>Edita cualquier archivo. Todas las vistas se recargan, y los errores aparecen en el panel de mensajes.</p></div>
+      </div>
+    </section>
+
+    <section class="wrap section faq">
+      <h2>Preguntas frecuentes</h2>
+      <details><summary>¿Cuesta algo?</summary><p>No. LiveProject es gratuito. Solo pagarías si decides conectar una IA de pago por uso (API de Anthropic, OpenAI o Gemini); con IA local no hay ningún coste.</p></details>
+      <details><summary>¿Funciona con mi framework?</summary><p>Detecta Laravel, Django, Flask, proyectos Node con <code>dev</code> o <code>start</code>, Rack, Go y PHP. Para cualquier otro, define el comando en <code>.liveproject.json</code>.</p></details>
+      <details><summary>¿Puedo usar un servidor que ya tengo en marcha?</summary><p>Sí. Indica su <code>url</code> en <code>.liveproject.json</code> y LiveProject se limita a mostrarlo, sin lanzar ningún proceso.</p></details>
+      <details><summary>¿Tengo que usar IA?</summary><p>No. Todo lo demás funciona sin ella. Si la activas, tú decides si es local o en la nube.</p></details>
+      <details><summary>¿Qué sistemas operativos soporta?</summary><p>Hoy se empaqueta para Linux (AppImage y .deb). Al estar hecho con Electron, ejecutarlo desde el código fuente en otros sistemas es posible, pero no está probado.</p></details>
+      <details><summary>¿Qué se guarda en mi proyecto?</summary><p>Capturas, sesiones e informes van a la carpeta <code>.liveproject/</code> dentro del proyecto. Conviene añadirla a tu <code>.gitignore</code>.</p></details>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <span>© LiveProject</span>
+      <a href="https://github.com/GMR027/liveproject">Código en GitHub</a>
+    </div>
+  </footer>
+  <script src="main.js" defer></script>
+</body>
+</html>
