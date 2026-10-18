@@ -6,5 +6,6 @@
   "scripts": {
     "dev": "node serve.js",
     "docker:build": "docker build -t liveproject-site ."
-  }
+  },
+  "license": "MIT"
 }

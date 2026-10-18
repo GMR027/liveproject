@@ -5,5 +5,6 @@
   "scripts": {
     "start": "npm --prefix app start --",
     "build": "npm --prefix app run build"
-  }
+  },
+  "license": "MIT"
 }

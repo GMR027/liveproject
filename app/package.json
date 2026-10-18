@@ -52,5 +52,6 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/GMR027/liveproject.git"
-  }
+  },
+  "license": "MIT"
 }

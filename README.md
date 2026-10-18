@@ -36,3 +36,7 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
 - **Interfaz**: menús *Vista* y *Herramientas*, barras de dispositivos y rendimiento plegables, y botón **⟲ Girar** en cada teléfono/tableta (o *Vista → Girar móviles y tabletas*) para ver el modo horizontal.
 - **Ajustes**: **Manual de usuario** integrado (pestaña 📖 Manual, también en el botón *Ayuda*), dispositivos personalizados (presets 2026 incluidos) y conexión de IA (Ollama/LM Studio locales, API de Anthropic/OpenAI/Gemini
   o CLI de suscripción: Claude Code, Codex, Gemini CLI) con comprobación y modelos recomendados.
+
+## Licencia
+
+MIT. Consulta [LICENSE](LICENSE).
