@@ -104,6 +104,9 @@ const Messages = (() => {
   }
 
   // Líneas de salida del servidor / texto de la página, con unión de trazas.
+  // Ruido interno de Chromium/Electron (p. ej. GPU/VSync) cuando el «servidor» es otra app Electron: no es un error del proyecto.
+  const CHROMIUM_LOG = /^\[\d+:\d{4}\/\d{6}(?:\.\d+)?:(?:ERROR|WARNING|INFO):[\w.]+\(\d+\)\]/;
+
   function feedText(text, origin, stream) {
     const state = (feedText.state ||= {});
     const sk = `${origin}:${stream === 'err' ? 'err' : 'out'}`;
@@ -114,6 +117,7 @@ const Messages = (() => {
     state[sk] = { rest, open: prev && prev.open, openAt: prev && prev.openAt };
     for (const line of lines) {
       if (!line.trim()) continue;
+      if (CHROMIUM_LOG.test(line)) continue;
       let hit = classify(line);
       // los 4xx/5xx de las peticiones ya los registra el panel Red (con el dispositivo): evitar duplicados
       if (hit && hit.lang === 'HTTP' && origin === 'servidor') hit = null;

@@ -13,15 +13,18 @@
     <div class="proj"><span id="project-name">Sin proyecto</span><span id="status" class="status">—</span></div>
     <input id="url" readonly>
     <div class="btn-group">
+      <button id="btn-back" title="Volver a la página anterior en todas las vistas" disabled>← Atrás</button>
       <button id="btn-reload" title="Recargar vistas">⟳ Recargar</button>
       <button id="btn-restart" title="Reiniciar servidor">⏻ Reiniciar</button>
     </div>
     <div class="menu">
       <button class="menu-btn" title="Opciones de visualización">👁 Vista ▾</button>
       <div class="menu-pop">
-        <label class="menu-item"><input type="checkbox" id="chk-sync" checked> <span>Sincronizar scroll y clics</span></label>
+        <label class="menu-item"><input type="checkbox" id="chk-sync" checked> <span>Sincronizar scroll, clics y formularios</span></label>
         <label class="menu-item"><input type="checkbox" id="chk-fit" checked> <span>Ajustar a la pantalla</span></label>
         <button type="button" class="menu-item" id="btn-rotate-all" title="Gira todos los teléfonos y tabletas a horizontal o vertical">⟲ <span>Girar móviles y tabletas</span></button>
+        <label class="menu-item" title="Muestra una sola vista ocupando toda el área de vistas, sin marco de dispositivo"><input type="checkbox" id="chk-full"> <span>Modo completo</span></label>
+        <label class="menu-item" id="full-pick" hidden>↳ <select id="full-sel"></select></label>
         <hr>
         <button type="button" class="menu-item" id="btn-toggle-devbar">📱 <span>Barra de dispositivos</span></button>
         <button type="button" class="menu-item" id="btn-toggle-perf">⚡ <span>Barra de rendimiento</span></button>
@@ -265,7 +268,7 @@
               <li>Para girarlos todos a la vez: <b>👁 Vista → ⟲ Girar móviles y tabletas</b>.</li>
               <li>La orientación se conserva al recargar y al cambiar otras opciones de dispositivos.</li>
               <li><b>Ajustar a la pantalla</b>: reduce cada dispositivo para que quepa en la altura disponible (muestra el % de escala). Si lo desactivas, ves el tamaño real con desplazamiento.</li>
-              <li><b>Sincronizar</b>: el scroll y los clics de una vista se repiten en las demás.</li>
+              <li><b>Sincronizar</b>: el scroll, los clics y lo que escribes o eliges en formularios (texto, listas, Enter para enviar) se repiten en las demás vistas.</li>
             </ul>
           </details>
 

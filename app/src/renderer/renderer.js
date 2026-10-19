@@ -9,6 +9,7 @@ let inspectId = null;   // dispositivo inspeccionado
 let inspected = null;   // { targetId }
 let activeTab = 'smart';
 let lastRoot = null;
+let fullId = null;     // dispositivo mostrado en modo completo (null = desactivado)
 let zoomed = null;     // vista ampliada a pantalla grande
 const rotated = new Set(); // ids de dispositivos girados a horizontal
 let netPending = [];   // peticiones de vistas que aún no han emitido dom-ready (no se conoce su webContents)
@@ -55,15 +56,33 @@ function layout() {
   if (!list.length) return;
   const fit = $('chk-fit').checked;
   const availH = stage.clientHeight - 28 - 30;
+  const full = fullId && frames.get(fullId);
+  stage.classList.toggle('full', !!full);
   for (const f of list) {
-    f.screen.style.width = `${size(f).w}px`;
-    f.screen.style.height = `${size(f).h}px`;
-    f.view.style.width = `${size(f).w}px`;
-    f.view.style.height = `${size(f).h}px`;
+    f.wrap.classList.toggle('full-on', f === full);
+    let sz = size(f);
+    if (f === full) {
+      // modo completo: ignora el tamaño del dispositivo y ocupa toda el área visible
+      f.fullScale = 1;
+      sz = { w: Math.max(1, Math.floor(stage.clientWidth)), h: Math.max(1, Math.floor(stage.clientHeight - f.title.offsetHeight - 1)) };
+    }
+    f.screen.style.width = `${sz.w}px`;
+    f.screen.style.height = `${sz.h}px`;
+    f.view.style.width = `${sz.w}px`;
+    f.view.style.height = `${sz.h}px`;
     f.nat = { w: f.deviceEl.offsetWidth, h: f.deviceEl.offsetHeight };
   }
-  const zr = zoomed ? stage.getBoundingClientRect() : null;
+  const z = theme.zoom / 100 || 1;
+  const zr = zoomed ? { left: 0, top: 0, width: window.innerWidth / z, height: window.innerHeight / z } : null;
   for (const f of list) {
+    if (f === full) {
+      const s = f.fullScale;
+      f.fit.style.width = `${f.nat.w * s}px`;
+      f.fit.style.height = `${f.nat.h * s}px`;
+      f.deviceEl.style.transform = `scale(${s})`;
+      f.label.textContent = `${f.device.name} · ${f.nat.w}×${f.nat.h} · completo`;
+      continue;
+    }
     if (f === zoomed) {
       Object.assign(f.wrap.style, { left: `${zr.left}px`, top: `${zr.top}px`, width: `${zr.width}px`, height: `${zr.height}px` });
       const scale = Math.min(2, (zr.width - 48) / f.nat.w, (zr.height - 28 - 48) / f.nat.h);
@@ -93,7 +112,7 @@ function el(tag, cls, parent, text) {
 function addFrame(device) {
   const f = { device, ready: false, landscape: rotated.has(device.id) && isMobile(device) };
   f.wrap = el('div', 'frame');
-  const title = el('div', 'title', f.wrap);
+  const title = f.title = el('div', 'title', f.wrap);
   f.label = el('span', '', title);
   if (isMobile(device)) {
     f.rot = el('button', 'rot-btn', title);
@@ -124,6 +143,7 @@ function addFrame(device) {
     if (netPending.length) feedNet([]);
     if (device.id === inspectId && !inspected) attachInspector();
   });
+  for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-fail-load', 'did-finish-load']) f.view.addEventListener(ev, updateBack);
   f.view.addEventListener('console-message', (e) => Messages.fromConsole(device.name, e.level, e.message, e.sourceId, e.line));
   f.view.addEventListener('did-fail-load', (e) => {
     if (e.isMainFrame && e.errorCode !== -3) Messages.fromLoadFailure(device.name, e.errorCode, e.errorDescription, e.validatedURL);
@@ -154,6 +174,8 @@ function setZoom(f) {
     for (const k of ['left', 'top', 'width', 'height']) prev.wrap.style[k] = '';
     prev.zoomBtn.textContent = '⛶ Ampliar';
     if (prev.ph) { prev.ph.remove(); prev.ph = null; }
+    if (prev.closeBtn) { prev.closeBtn.remove(); prev.closeBtn = null; }
+    window.liveproject.devtoolsVisible(!$('settings').open);
   }
   zoomed = f;
   if (f) {
@@ -162,8 +184,32 @@ function setZoom(f) {
     f.wrap.before(f.ph);
     f.wrap.classList.add('zoomed');
     f.zoomBtn.textContent = '✕ Cerrar';
+    f.closeBtn = el('button', 'zoom-close', f.wrap, '✕ Cerrar');
+    f.closeBtn.type = 'button';
+    f.closeBtn.title = 'Salir del modo ampliado (Esc)';
+    f.closeBtn.onclick = () => setZoom(null);
+    window.liveproject.devtoolsVisible(false); // las DevTools son una vista nativa que taparía la ampliación
   }
   layout();
+}
+
+function setFull(on) {
+  fullId = on ? ([...frames.keys()].includes(fullId) ? fullId : (frames.has(inspectId) ? inspectId : [...frames.keys()][0]) || null) : null;
+  if (on && !fullId) { $('chk-full').checked = false; return toast('No hay vistas activas'); }
+  if (fullId && zoomed) setZoom(null);
+  refreshFullPick();
+  layout();
+}
+
+function refreshFullPick() {
+  const sel = $('full-sel');
+  sel.textContent = '';
+  for (const f of frames.values()) { const o = el('option', '', sel); o.value = f.device.id; o.textContent = f.device.name; }
+  if (fullId && !frames.has(fullId)) fullId = null;
+  if (!fullId && $('chk-full').checked) fullId = frames.size ? [...frames.keys()][0] : null;
+  if (!fullId) $('chk-full').checked = false;
+  sel.value = fullId || '';
+  $('full-pick').hidden = !$('chk-full').checked;
 }
 
 function setLandscape(f, on, noLayout) {
@@ -215,6 +261,7 @@ function rebuildFrames() {
   if (wraps.some((w, i) => w !== current[i])) for (const w of wraps) stage.appendChild(w);
   $('empty').hidden = frames.size > 0 || !!currentUrl;
   refreshTargets();
+  refreshFullPick();
   layout();
 }
 
@@ -382,6 +429,21 @@ function initSettings() {
 function reloadAll() {
   for (const f of frames.values()) {
     try { f.view.reload(); } catch { /* aún sin cargar */ }
+  }
+}
+
+// Retroceso manual: solo lo pide el usuario (p. ej. tras llegar a una página de error).
+function updateBack() {
+  let can = false;
+  for (const f of frames.values()) {
+    try { if (f.ready && f.view.canGoBack()) can = true; } catch { /* sin adjuntar */ }
+  }
+  $('btn-back').disabled = !can;
+}
+
+function backAll() {
+  for (const f of frames.values()) {
+    try { if (f.view.canGoBack()) f.view.goBack(); } catch { /* sin adjuntar */ }
   }
 }
 
@@ -819,11 +881,14 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
 
   $('btn-open').onclick = () => window.liveproject.chooseFolder();
   $('btn-reload').onclick = reloadAll;
+  $('btn-back').onclick = backAll;
   $('btn-restart').onclick = () => window.liveproject.restart();
   $('btn-shot').onclick = takeShots;
   $('btn-settings').onclick = openSettings;
   $('btn-help').onclick = openManual;
   $('btn-rotate-all').onclick = rotateAll;
+  $('chk-full').onchange = (e) => setFull(e.target.checked);
+  $('full-sel').onchange = (e) => { fullId = e.target.value; layout(); };
   initChrome();
   $('btn-panel').onclick = () => togglePanel($('bottom').hidden);
   $('btn-close-panel').onclick = () => togglePanel(false);

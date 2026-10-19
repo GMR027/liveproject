@@ -36,7 +36,7 @@ button.active, button.primary { background:var(--sel); border-color:var(--accent
 .frame { flex:none; }
 .frame .title { display:flex; gap:8px; align-items:center; justify-content:center; margin:0 0 8px; color:var(--muted); font-size:12px; }
 .frame .title button { padding:0 6px; font-size:12px; line-height:18px; }
-.frame.zoomed { position:fixed; z-index:50; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 4px;
+.frame.zoomed { position:fixed; z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:0 0 4px;
   background:radial-gradient(circle at 50% 30%, var(--stage), #0b0b0e 85%); }
 .frame.zoomed .title { font-size:13px; color:var(--fg); }
 .zoom-btn { white-space:nowrap; }
@@ -420,3 +420,18 @@ dialog::backdrop { background:rgba(5,6,18,.65); backdrop-filter:blur(5px); }
 @media (prefers-reduced-motion: reduce) { * { animation:none !important; transition:none !important; } }
 .dlg-x { z-index:5; background:var(--surface2); }
 .frame .title button.zoom-btn { padding:3px 11px; font-size:11px; line-height:1.3; border-radius:999px; background:var(--surface); font-weight:600; }
+
+.zoom-close { position:absolute; top:12px; right:14px; z-index:2; padding:8px 18px; border-radius:999px; border:1px solid #ff8a8a; background:#d32f2f; color:#fff; font-weight:700; font-size:14px; cursor:pointer; animation:zoom-blink 1s ease-in-out infinite; }
+.zoom-close:hover { background:#f44336; }
+@keyframes zoom-blink { 0%,100% { opacity:1; box-shadow:0 0 14px 2px rgba(255,60,60,.8); } 50% { opacity:.45; box-shadow:0 0 0 0 rgba(255,60,60,0); } }
+
+/* ---------- modo completo ---------- */
+#stage { position:relative; }
+#stage.full { padding:0; gap:0; overflow:hidden; display:block; }
+#stage.full > .frame:not(.full-on) { display:none; }
+#stage.full > .frame.full-on { position:absolute; inset:0; display:flex; flex-direction:column; }
+#stage.full .frame.full-on .title { margin:0; padding:6px 0; }
+#stage.full .full-on .fit { margin:0; }
+#stage.full .full-on .device .bezel { padding:0; border-radius:0; box-shadow:none; background:none; }
+#stage.full .full-on .device .bezel::before, #stage.full .full-on .device .bezel::after,
+#stage.full .full-on .device .base, #stage.full .full-on .device .neck, #stage.full .full-on .device .foot { display:none; }
