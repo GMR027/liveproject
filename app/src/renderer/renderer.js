@@ -144,11 +144,16 @@ function addFrame(device) {
     if (device.id === inspectId && !inspected) attachInspector();
   });
   for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-fail-load', 'did-finish-load']) f.view.addEventListener(ev, updateBack);
+  f.view.addEventListener('did-navigate', (e) => {
+    Routes.visited(e.url);          // las rutas que visitas se suman al panel «Rutas»
+    if (e.url) $('url').value = e.url;
+  });
   f.view.addEventListener('console-message', (e) => Messages.fromConsole(device.name, e.level, e.message, e.sourceId, e.line));
   f.view.addEventListener('did-fail-load', (e) => {
     if (e.isMainFrame && e.errorCode !== -3) Messages.fromLoadFailure(device.name, e.errorCode, e.errorDescription, e.validatedURL);
   });
   f.view.addEventListener('did-finish-load', () => {
+    Routes.onLoaded(f);             // recoge los enlaces de la página para el panel «Rutas»
     if ([...frames.values()][0] === f) {
       f.view.executeJavaScript('document.body ? document.body.innerText.slice(0, 40000) : ""').then((t) => Messages.fromPageText(device.name, t), () => {});
     }
@@ -432,6 +437,29 @@ function reloadAll() {
   }
 }
 
+/* ---------------- navegación a rutas (panel «Rutas») ---------------- */
+// Convierte una ruta del proyecto (/login) en URL absoluta según la raíz del servidor.
+function routeUrl(route) {
+  if (/^https?:/i.test(route)) return route;
+  const base = new URL(currentUrl);
+  const dir = base.pathname.replace(/[^/]*$/, ''); // carpeta de la página de inicio
+  return base.origin + dir.replace(/\/$/, '') + (route.startsWith('/') ? route : `/${route}`);
+}
+
+function navigateTo(route, onlyId) {
+  if (!currentUrl) return toast('Abre un proyecto primero');
+  let url;
+  try { url = routeUrl(route); } catch { return toast('URL no válida'); }
+  const list = onlyId ? [frames.get(onlyId)] : [...frames.values()];
+  let n = 0;
+  for (const f of list) {
+    if (!f) continue;
+    try { f.view.setAttribute('src', url); n++; } catch { /* sin adjuntar */ }
+  }
+  if (!n) return toast('No hay vistas activas');
+  toast(`Abriendo ${route}`);
+}
+
 // Retroceso manual: solo lo pide el usuario (p. ej. tras llegar a una página de error).
 function updateBack() {
   let can = false;
@@ -451,7 +479,7 @@ function applyState(s) {
   if (s.root && s.root !== lastRoot) {
     lastRoot = s.root;
     Sessions.start(s.root.split('/').pop());
-    Messages.reset(); Net.reset(); Links.reset(); CssLint.reset();
+    Messages.reset(); Net.reset(); Links.reset(); CssLint.reset(); Routes.reset(s.root);
     netPending = [];
     $('log-out').textContent = '';
   }
@@ -825,8 +853,9 @@ function feedNet(batch) {
 
 function setSide(name) {
   document.querySelectorAll('.stab2').forEach((b) => b.classList.toggle('active', b.dataset.side === name));
-  for (const id of ['messages', 'net', 'links', 'history']) $(`side-${id}`).hidden = id !== name;
+  for (const id of ['messages', 'net', 'links', 'routes', 'history']) $(`side-${id}`).hidden = id !== name;
   if (name === 'history') Sessions.render();
+  if (name === 'routes') Routes.show();
 }
 
 function initSideSplitter() {
@@ -926,6 +955,14 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
     list: $('links-list'), status: $('links-status'), btn: $('links-run'), filterSel: $('links-filter'), badge: $('links-badge'),
     getView: () => viewOf(inspectId), deviceName: () => (frames.get(inspectId) || { device: {} }).device.name || '',
     onDone: Sessions.touch
+  });
+  Routes.init({
+    list: $('routes-list'), status: $('routes-status'), badge: $('routes-badge'),
+    btn: $('routes-run'), checkBtn: $('routes-check'), clearBtn: $('routes-clear'),
+    search: $('routes-search'), pageBox: $('routes-page'),
+    views: () => [...frames.values()], selected: () => inspectId,
+    visible: () => !$('side-routes').hidden,
+    navigate: navigateTo, abs: routeUrl, baseUrl: () => currentUrl
   });
   CssLint.init({
     list: $('csl-list'), status: $('csl-status'), btn: $('csl-run'), aiBtn: $('csl-ai'), aiOut: $('csl-ai-out'), badge: $('csl-badge'),

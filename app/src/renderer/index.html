@@ -39,7 +39,7 @@
     </div>
     <button id="btn-lan" title="Abrir el proyecto en el móvil, la tableta u otro equipo de la red">📡 Red local <span id="lan-count" class="badge ok-badge" hidden></span></button>
     <div class="btn-group seg">
-      <button id="btn-msgs" class="active" title="Mostrar/ocultar paneles laterales (mensajes, red, enlaces, historial)">🗂 Paneles <span id="msg-badge" class="badge" hidden></span></button>
+      <button id="btn-msgs" class="active" title="Mostrar/ocultar paneles laterales (mensajes, red, enlaces, rutas, historial)">🗂 Paneles <span id="msg-badge" class="badge" hidden></span></button>
       <button id="btn-panel" class="active" title="Mostrar/ocultar panel inferior">🔍 Inspector</button>
     </div>
     <button id="btn-help" title="Manual de usuario">📖 Ayuda</button>
@@ -64,6 +64,7 @@
         <button class="stab2 active" data-side="messages">💬 Mensajes</button>
         <button class="stab2" data-side="net">🌐 Red <span id="net-badge" class="badge" hidden></span></button>
         <button class="stab2" data-side="links">🔗 Enlaces <span id="links-badge" class="badge" hidden></span></button>
+        <button class="stab2" data-side="routes">🧭 Rutas <span id="routes-badge" class="badge" hidden></span></button>
         <button class="stab2" data-side="history">🕘 Historial</button>
       </div>
 
@@ -99,6 +100,20 @@
           <span id="links-status" class="muted"></span>
         </div>
         <div id="links-list" class="side-list"></div>
+      </section>
+
+      <section id="side-routes" class="side-pane" hidden>
+        <div class="side-head">
+          <button id="routes-run" class="primary" title="Busca las rutas en el código del proyecto y en las páginas cargadas">🧭 Explorar</button>
+          <input id="routes-search" type="text" placeholder="Filtrar ruta…" spellcheck="false">
+          <button id="routes-check" title="Comprueba cada ruta con HTTP y muestra su código">✔</button>
+          <button id="routes-clear" title="Vaciar la lista">Limpiar</button>
+        </div>
+        <div class="route-opts muted">
+          <label class="check" title="Recoge los enlaces de las páginas cargadas y las rutas que visitas"><input type="checkbox" id="routes-page" checked> Enlaces de la página</label>
+          <span id="routes-status"></span>
+        </div>
+        <div id="routes-list" class="side-list"></div>
       </section>
 
       <section id="side-history" class="side-pane" hidden>
@@ -254,7 +269,7 @@
               <li><b>Barra de dispositivos</b>: botones para activar o desactivar cada pantalla. Se pliega con el título <i>Dispositivos</i>.</li>
               <li><b>Escenario</b>: el centro, donde viven los dispositivos. Si no caben, desplázate horizontalmente.</li>
               <li><b>Barra de rendimiento</b> (bajo el escenario): puntuación y métricas de carga por dispositivo. Plegable.</li>
-              <li><b>🗂 Paneles</b> (derecha): Mensajes, Red, Enlaces e Historial. Arrastra el separador para cambiar el ancho.</li>
+              <li><b>🗂 Paneles</b> (derecha): Mensajes, Red, Enlaces, Rutas e Historial. Arrastra el separador para cambiar el ancho.</li>
               <li><b>🔍 Inspector</b> (abajo): Inspector inteligente, DevTools, CSS responsive y registro del servidor. Arrastra el separador para cambiar la altura.</li>
               <li><b>⚙ Ajustes</b>: dispositivos, IA, tema, aplicación y este manual.</li>
             </ul>
@@ -327,6 +342,16 @@
 
           <details><summary>🔗 Panel de Enlaces</summary>
             <p>Pulsa <b>🔗 Comprobar</b> para validar enlaces, imágenes, scripts, estilos, iframes y medios (HEAD/GET). Detecta además anclajes <code>#id</code> inexistentes, contenido mixto http/https y redirecciones. Cambia el filtro entre <i>Problemas</i> y <i>Correctos</i>.</p>
+          </details>
+
+          <details><summary>🧭 Panel de Rutas</summary>
+            <ul>
+              <li>Lista las rutas del proyecto para llegar a cualquier página (<code>/login</code>, <code>/admin</code>…) sin escribir la dirección a mano. Se apoya en tres fuentes: el <b>código</b> (definiciones de Laravel, Symfony, Django, Flask/FastAPI, Express, NestJS, Rails, Gin/Echo, Spring, ASP.NET, Next, Nuxt, React/Vue Router, SvelteKit, Astro y páginas PHP/HTML), los <b>enlaces</b> de las páginas cargadas y las rutas que ya has <b>visitado</b>.</li>
+              <li><b>🧭 Explorar</b> vuelve a recorrer el proyecto; la casilla <i>Enlaces de la página</i> añade también los enlaces de cada vista al cargarlas.</li>
+              <li><b>Clic en una ruta</b>: todas las vistas navegan a ella (también en modo completo). <b>Shift+clic</b>: solo la vista elegida en el inspector.</li>
+              <li><b>✔</b> comprueba cada ruta con HTTP y muestra su código: verde (2xx), ámbar (redirección), rojo (4xx/5xx o sin conexión). Las rutas con parámetros (<code>/users/:id</code>) se marcan como <i>parámetro</i> y no se comprueban.</li>
+              <li>Cada fila indica el origen: fichero y línea cuando procede, o si vino de la página o de una visita. Filtra por ruta, fichero o etiqueta con el cuadro de texto.</li>
+            </ul>
           </details>
 
           <details><summary>🕘 Historial e 📄 informes</summary>
@@ -404,6 +429,7 @@
   <script src="messages.js"></script>
   <script src="net.js"></script>
   <script src="links.js"></script>
+  <script src="routes.js"></script>
   <script src="csslint.js"></script>
   <script src="sessions.js"></script>
   <script src="report.js"></script>

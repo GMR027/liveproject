@@ -224,6 +224,21 @@ body.dragging-col { cursor:col-resize !important; }
 .links-h { margin:10px 0 4px; font-weight:600; color:#cfd2ff; }
 .links-ok { padding:10px 2px; }
 
+/* rutas */
+.route-opts { display:flex; gap:10px; align-items:center; padding:4px 10px; font-size:11px; flex-wrap:wrap; border-bottom:1px solid var(--line); }
+.route-row { padding:6px 8px; border:1px solid var(--line); border-radius:8px; margin:4px 0; background:var(--surface); cursor:pointer; transition:border-color .15s, background .15s; }
+.route-row:hover { border-color:var(--accent); background:var(--surface2); }
+.route-top { display:flex; gap:6px; align-items:center; }
+.route-path { flex:1; min-width:0; font:12px ui-monospace, monospace; color:var(--accent); word-break:break-all; }
+.route-tag { flex:none; font-size:10px; padding:1px 6px; border-radius:999px; border:1px solid var(--line); background:var(--surface2); color:var(--muted); }
+.route-tag.param { color:#e8c95a; border-color:rgba(232,201,90,.45); }
+.route-tag.st-ok { color:var(--ok); border-color:color-mix(in srgb, var(--ok) 45%, transparent); }
+.route-tag.st-redir { color:#e8c95a; border-color:rgba(232,201,90,.45); }
+.route-tag.st-err { color:var(--err); border-color:color-mix(in srgb, var(--err) 45%, transparent); }
+.route-meta { display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:3px; font-size:10px; color:var(--muted); }
+.route-file { font-family:ui-monospace, monospace; opacity:.85; word-break:break-all; }
+#routes-status { margin-left:auto; }
+
 /* historial */
 .hist-row { display:flex; gap:6px; align-items:center; border:1px solid var(--line); border-radius:6px; margin-bottom:6px; background:#20202a; }
 .hist-row.current { border-color:var(--accent); }

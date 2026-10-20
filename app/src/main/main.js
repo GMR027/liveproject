@@ -9,6 +9,7 @@ const ai = require('./ai');
 const appManager = require('./app-manager');
 const history = require('./history');
 const { checkLinks } = require('./linkcheck');
+const { scanRoutes } = require('./routes');
 const { startNetworkCapture } = require('./network');
 const { createLan } = require('./lan');
 const { ensureDesktopEntry, ICON } = require('./desktop-entry');
@@ -150,6 +151,7 @@ ipcMain.handle('devtools:bounds', (_e, bounds) => { if (dtView) dtView.setBounds
 ipcMain.handle('devtools:visible', (_e, v) => { if (dtView) dtView.setVisible(!!v); });
 ipcMain.handle('devtools:hide', closeDevTools);
 ipcMain.handle('links:check', (_e, urls) => checkLinks(urls.map(String), (done, total) => send('links:progress', { done, total })));
+ipcMain.handle('routes:scan', () => scanRoutes(cfg ? cfg.root : null, cfg ? cfg.ignore : null));
 ipcMain.handle('history:save', (_e, session) => { if (cfg) history.save(cfg.root, session); });
 ipcMain.handle('history:list', () => (cfg ? history.list(cfg.root) : []));
 ipcMain.handle('history:load', (_e, id) => { try { return cfg ? history.load(cfg.root, id) : null; } catch { return null; } });

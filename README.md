@@ -26,6 +26,8 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
   - **Red**: todas las peticiones de cada vista (método, estado, tipo, tamaño, tiempo, cabeceras clave). Filtros por tipo/URL y «solo fallos»;
     los 4xx/5xx y fallos de red también se añaden a *Mensajes*.
   - **Enlaces**: comprueba enlaces, imágenes, scripts, estilos, iframes y medios (HEAD/GET), anclajes `#id` inexistentes, contenido mixto y redirecciones.
+  - **Rutas**: lista las rutas del proyecto (`/login`, `/admin`…) para abrirlas con un clic en las vistas: las busca en el código (Laravel, Symfony, Django, Flask/FastAPI, Express, NestJS, Rails, Gin/Echo, Spring, ASP.NET, Next, Nuxt, React/Vue Router, SvelteKit, Astro y páginas PHP/HTML),
+    en los enlaces de las páginas cargadas y en las rutas ya visitadas. `✔` comprueba cada una con HTTP y muestra su estado; Shift+clic abre la ruta solo en la vista seleccionada.
   - **Historial**: cada sesión se guarda sola en `<proyecto>/.liveproject/sessions/<fecha>.json` (últimas 50). Puedes reabrirlas o borrarlas.
 - **CSS responsive** (panel inferior): linter que analiza cada dispositivo activo con su viewport real (desbordes, anchos fijos, objetivos táctiles,
   tipografía, imágenes, `100vh`, media queries…), resalta los elementos en la página y propone correcciones; con IA conectada, «Corregir con IA» y «Revisión con IA».

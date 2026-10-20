@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('liveproject', {
   restart: () => ipcRenderer.invoke('project:restart'),
   saveScreenshots: (shots) => ipcRenderer.invoke('screenshot:save', shots),
   checkLinks: (urls) => ipcRenderer.invoke('links:check', urls),
+  scanRoutes: () => ipcRenderer.invoke('routes:scan'),
   historySave: (s) => ipcRenderer.invoke('history:save', s),
   historyList: () => ipcRenderer.invoke('history:list'),
   historyLoad: (id) => ipcRenderer.invoke('history:load', id),
