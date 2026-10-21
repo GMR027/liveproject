@@ -126,12 +126,67 @@ const Routes = (() => {
       it.sources.forEach((s) => {
         if (SRC[s]) el('span', `route-src src-${s}`, meta, `${SRC[s].icon} ${SRC[s].label}`);
       });
-      if (it.file) el('span', 'route-file', meta, `${it.file}${it.line ? `:${it.line}` : ''}${it.label ? ` · ${it.label}` : ''}`);
+      if (it.file) {
+        const f = el('span', 'route-file link', meta, `${it.file}${it.line ? `:${it.line}` : ''}${it.label ? ` · ${it.label}` : ''}`);
+        f.title = 'Abrir en el editor de código';
+        f.onclick = (e) => { e.stopPropagation(); openInEditor(it); };
+      }
+      const qr = el('button', 'route-qr', meta, '📱');
+      qr.type = 'button';
+      qr.title = 'Ver el código QR para abrir esta ruta en el móvil';
+      qr.onclick = (e) => { e.stopPropagation(); showQr(it); };
       row.onclick = (e) => ui.navigate(it.path, e.shiftKey ? ui.selected() : null);
     }
     if (shown.length > MAX_ROWS) {
       el('div', 'hint', ui.list, `… y ${shown.length - MAX_ROWS} ruta(s) más. Afina el filtro para verlas.`);
     }
+  }
+
+  /* ---------------- abrir en el editor ---------------- */
+  async function openInEditor(it) {
+    const root = ui && ui.root ? ui.root() : '';
+    if (!root) return ui.toast('Abre un proyecto primero');
+    const r = await window.liveproject.editorOpen(`${root}/${it.file}`, it.line);
+    if (!r || !r.ok) ui.toast((r && r.message) || 'No se pudo abrir el editor');
+    else ui.toast(`Abierto en ${r.editor}${r.line ? ` (línea ${r.line})` : ''}`);
+  }
+
+  /* ---------------- código QR de una ruta ---------------- */
+  async function showQr(it) {
+    const dlg = $('qr');
+    const body = $('qr-body');
+    body.textContent = '';
+    $('qr-title').textContent = `📱 ${it.path}`;
+    let abs = it.path;
+    try { abs = ui.abs(it.path); } catch { /* sin proyecto */ }
+    // Si la red local está activa se usa su dirección (sirve para el móvil); si no, la local.
+    let url = abs;
+    let hint = 'Esta dirección solo funciona en este equipo.';
+    try {
+      const st = await window.liveproject.lanStatus();
+      if (st && st.running && st.addresses && st.addresses.length) {
+        const a = st.addresses[0];
+        url = `http://${a.address}:${st.port}${it.path}`;
+        hint = 'Escanea el QR con el móvil (misma red Wi-Fi).';
+      }
+    } catch { /* sin red local */ }
+    const canvas = document.createElement('canvas');
+    canvas.className = 'lan-qr';
+    body.appendChild(canvas);
+    try { Lan.drawQr(canvas, url); } catch { canvas.remove(); }
+    const code = document.createElement('code');
+    code.className = 'qr-url';
+    code.textContent = url;
+    body.appendChild(code);
+    const p = document.createElement('p');
+    p.className = 'muted';
+    p.textContent = hint;
+    body.appendChild(p);
+    const cp = document.createElement('button');
+    cp.textContent = 'Copiar dirección';
+    cp.onclick = () => navigator.clipboard.writeText(url);
+    body.appendChild(cp);
+    dlg.showModal();
   }
 
   /* ---------------- acciones ---------------- */
@@ -219,6 +274,8 @@ const Routes = (() => {
   function init(o) {
     ui = o;
     o.btn.onclick = scan;
+    const x = document.getElementById('qr-x');
+    if (x) x.onclick = () => document.getElementById('qr').close();
     o.checkBtn.onclick = check;
     o.clearBtn.onclick = () => { items.clear(); filter = ''; o.search.value = ''; render(); };
     o.search.oninput = () => { filter = o.search.value.trim().toLowerCase(); render(); };

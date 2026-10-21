@@ -10,6 +10,10 @@
   <header id="toolbar">
     <div class="brand" title="LiveProject"><span class="logo">◈</span><b>Live<span>Project</span></b></div>
     <button id="btn-open" title="Abrir carpeta de proyecto">📂 Abrir</button>
+    <div class="menu">
+      <button class="menu-btn" title="Proyectos recientes">🕘 ▾</button>
+      <div class="menu-pop" id="recent-list"></div>
+    </div>
     <div class="proj"><span id="project-name">Sin proyecto</span><span id="status" class="status">—</span></div>
     <input id="url" readonly>
     <div class="btn-group">
@@ -34,6 +38,7 @@
       <button class="menu-btn" title="Capturas, informes y pruebas">🧰 Herramientas ▾</button>
       <div class="menu-pop">
         <button type="button" class="menu-item" id="btn-shot" title="Capturar todas las vistas">📷 <span>Captura de todas las vistas</span></button>
+        <button type="button" class="menu-item" id="btn-compare" title="Comparar la captura actual con la anterior y guardar la imagen de diferencias">🔍 <span>Comparar capturas</span></button>
         <button type="button" class="menu-item" id="btn-report" title="Exportar informe (HTML y Markdown)">📄 <span>Exportar informe</span></button>
       </div>
     </div>
@@ -66,6 +71,7 @@
         <button class="stab2" data-side="links">🔗 Enlaces <span id="links-badge" class="badge" hidden></span></button>
         <button class="stab2" data-side="routes">🧭 Rutas <span id="routes-badge" class="badge" hidden></span></button>
         <button class="stab2" data-side="history">🕘 Historial</button>
+        <button class="stab2" data-side="tools" title="Inspector inteligente, DevTools, CSS responsive y registro del servidor">🔧 Herramientas</button>
       </div>
 
       <section id="side-messages" class="side-pane">
@@ -75,6 +81,7 @@
           <button id="msg-clear">Limpiar</button>
         </div>
         <label class="msg-auto muted" title="Con IA local, los errores nuevos se explican solos (máx. 20 por sesión)"><input type="checkbox" id="msg-auto"> Explicar errores automáticamente (IA local)</label>
+        <label class="msg-auto muted" title="Muestra también los console.log y console.info de las páginas (pueden ser muchos)"><input type="checkbox" id="msg-logs"> Mostrar también console.log / info</label>
         <div id="msg-langs"></div>
         <div id="msg-list"></div>
       </section>
@@ -88,6 +95,8 @@
         <div class="net-opts muted">
           <label class="check"><input type="checkbox" id="net-fail"> Solo fallos</label>
           <label class="check"><input type="checkbox" id="net-keep"> Conservar al recargar</label>
+          <button id="net-wf" title="Ver la línea de tiempo de las peticiones">Cascada</button>
+          <button id="net-har" title="Exportar las peticiones en formato HAR (compatible con Chrome DevTools)">Exportar HAR</button>
           <span id="net-summary"></span>
         </div>
         <div id="net-list" class="side-list"></div>
@@ -124,24 +133,35 @@
         </div>
         <div id="hist-list" class="side-list"></div>
       </section>
+
+      <!-- Las herramientas (inspector inteligente, DevTools, CSS responsive y servidor)
+           se trasladan aquí desde el panel inferior con el botón «⇱ Derecha». -->
+      <section id="side-tools" class="side-pane" hidden>
+        <div id="tools-bar"></div>
+        <div id="tools-host"></div>
+      </section>
     </aside>
   </div>
 
   <div id="splitter" title="Arrastra para cambiar el tamaño"></div>
   <section id="bottom">
     <div id="bottom-bar">
-      <button class="tab active" data-tab="smart">✨ Inspector inteligente</button>
+      <button class="tab active" data-tab="smart">✨ <span class="tl-long">Inspector inteligente</span><span class="tl-short">Inspector</span></button>
       <button class="tab" data-tab="devtools">DevTools</button>
-      <button class="tab" data-tab="csslint">📐 CSS responsive <span id="csl-badge" class="badge" hidden></span></button>
+      <button class="tab" data-tab="csslint">📐 <span class="tl-long">CSS responsive</span><span class="tl-short">CSS</span> <span id="csl-badge" class="badge" hidden></span></button>
       <button class="tab" data-tab="logs">Servidor</button>
+      <button class="tab" data-tab="storage">💾 Almacenamiento</button>
+      <button class="tab" data-tab="audit">📋 Auditoría</button>
       <span class="spacer"></span>
       <label class="check" id="target-label">Dispositivo <select id="inspect-target"></select></label>
+      <button id="btn-dock" title="Colocar las herramientas en el panel lateral derecho y liberar espacio">⇱ Derecha</button>
       <button id="btn-close-panel" title="Cerrar panel">✕</button>
     </div>
     <div id="tab-smart" class="pane">
       <div class="smart-bar">
         <button id="smart-analyze">⟳ Analizar</button>
         <button id="smart-pick">🎯 Elegir en la página</button>
+        <button id="smart-open" title="Abrir en el editor el fichero del proyecto que corresponde a esta página">📝 Abrir en el editor</button>
         <label class="check"><input type="checkbox" id="smart-auto" checked> Analizar al recargar</label>
         <span id="smart-status" class="muted"></span>
         <span class="legend"><i style="background:#6c8cff"></i>estructura <i style="background:#4cc38a"></i>texto <i style="background:#f59e0b"></i>medios <i style="background:#c084fc"></i>formularios</span>
@@ -152,7 +172,15 @@
         <div id="smart-summary"></div>
       </div>
     </div>
-    <div id="tab-inspector" class="pane" hidden><div class="hint">DevTools se activa cuando carga una vista.</div></div>
+    <div id="tab-inspector" class="pane" hidden>
+      <div class="dt-bar">
+        <button id="dt-max" title="Ampliar las DevTools a todo el espacio de trabajo">⛶ Ampliar</button>
+        <button id="dt-dev" title="Cambiar de dispositivo para las DevTools">⇄ Dispositivo</button>
+        <span class="spacer"></span>
+        <span class="muted dt-note">DevTools reales de Chromium</span>
+      </div>
+      <div id="dt-content"><div class="hint">DevTools se activa cuando carga una vista.</div></div>
+    </div>
     <div id="tab-csslint" class="pane" hidden>
       <div class="smart-bar">
         <button id="csl-run" class="primary">▶ Analizar dispositivos activos</button>
@@ -161,7 +189,48 @@
       </div>
       <div id="csl-body"><div id="csl-ai-out" class="msg-ai" hidden></div><div id="csl-list"></div></div>
     </div>
-    <div id="tab-logs" class="pane" hidden><pre id="log-out"></pre></div>
+    <div id="tab-logs" class="pane" hidden>
+      <div class="log-bar">
+        <input id="log-filter" type="text" placeholder="Filtrar la salida…" spellcheck="false">
+        <label class="check" title="Desplazarse automáticamente al final"><input type="checkbox" id="log-follow" checked> Seguir</label>
+        <button id="log-clear">Limpiar</button>
+        <span class="spacer"></span>
+        <input id="log-input" type="text" placeholder="Escribe y pulsa Enter para enviarlo al servidor…" spellcheck="false">
+        <button id="log-send" title="Enviar al proceso del servidor (stdin)">Enviar</button>
+      </div>
+      <pre id="log-out"></pre>
+    </div>
+
+    <div id="tab-storage" class="pane" hidden>
+      <div class="smart-bar">
+        <button id="stg-run" class="primary">💾 Leer almacenamiento</button>
+        <button id="stg-clear" title="Borrar cookies, localStorage y sessionStorage de esta vista">🧹 Limpiar</button>
+        <span id="stg-status" class="muted"></span>
+      </div>
+      <div id="stg-list" class="side-list"></div>
+    </div>
+
+    <div id="tab-audit" class="pane" hidden>
+      <div class="smart-bar">
+        <button id="aud-run" class="primary">📋 Auditar la página</button>
+        <button id="aud-ai" title="Prioriza los hallazgos y propone las correcciones">💡 Revisión con IA</button>
+        <span id="aud-status" class="muted"></span>
+      </div>
+      <div id="aud-body">
+        <div id="aud-ai-out" class="msg-ai" hidden></div>
+        <div id="aud-list"></div>
+        <div class="cmp-box">
+          <div class="smart-bar">
+            <b>Comparar dispositivos</b>
+            <select id="cmp-a"></select>
+            <span class="muted">vs</span>
+            <select id="cmp-b"></select>
+            <button id="cmp-run">🔍 Comparar</button>
+          </div>
+          <div id="cmp-out"></div>
+        </div>
+      </div>
+    </div>
   </section>
 
   <dialog id="settings">
@@ -169,11 +238,26 @@
     <form method="dialog" id="settings-form">
       <div class="set-tabs">
         <button type="button" class="stab active" data-stab="devices">📱 Dispositivos</button>
+        <button type="button" class="stab" data-stab="project">🧩 Proyecto</button>
         <button type="button" class="stab" data-stab="ai">🤖 Inteligencia artificial <span id="ai-dot" class="dot"></span></button>
         <button type="button" class="stab" data-stab="theme">🎨 Tema</button>
         <button type="button" class="stab" data-stab="app">🛠 Aplicación</button>
         <button type="button" class="stab" data-stab="manual">📖 Manual</button>
       </div>
+
+      <section id="set-project" hidden>
+        <p class="muted">Cómo se arranca el servidor de tu proyecto. LiveProject ya lo detecta solo, pero aquí puedes ajustarlo o guardar una configuración propia en <code>.liveproject.json</code>.</p>
+        <div class="row-actions">
+          <select id="preset-project"><option value="">Plantilla rápida…</option></select>
+          <button type="button" id="btn-reload-cfg">Recargar</button>
+          <button type="button" id="btn-save-cfg" class="primary">Guardar configuración</button>
+        </div>
+        <div class="row-actions" style="margin-top:8px">
+          <span class="muted" id="proj-state">—</span>
+        </div>
+        <textarea id="proj-json" class="proj-json" spellcheck="false" rows="10" placeholder='{ "command": "php -S 127.0.0.1:{port} -t {root}" }'></textarea>
+        <p class="muted">Placeholders: <code>{port}</code> y <code>{root}</code>. Con <code>"url"</code> se usa un servidor que ya está en marcha (XAMPP, Docker…) y no se lanza ningún proceso.</p>
+      </section>
 
       <section id="set-devices">
         <p class="muted">Define los tamaños de pantalla para el diseño responsivo y marca los que quieres ver. Los tamaños son viewport en píxeles CSS.</p>
@@ -269,11 +353,48 @@
               <li><b>Barra de dispositivos</b>: botones para activar o desactivar cada pantalla. Se pliega con el título <i>Dispositivos</i>.</li>
               <li><b>Escenario</b>: el centro, donde viven los dispositivos. Si no caben, desplázate horizontalmente.</li>
               <li><b>Barra de rendimiento</b> (bajo el escenario): puntuación y métricas de carga por dispositivo. Plegable.</li>
-              <li><b>🗂 Paneles</b> (derecha): Mensajes, Red, Enlaces, Rutas e Historial. Arrastra el separador para cambiar el ancho.</li>
+              <li><b>🗂 Paneles</b> (derecha): Mensajes, Red, Enlaces, Rutas, Historial y Herramientas. Arrastra el separador para cambiar el ancho.</li>
               <li><b>🔍 Inspector</b> (abajo): Inspector inteligente, DevTools, CSS responsive y registro del servidor. Arrastra el separador para cambiar la altura.</li>
+              <li><b>⇱ Derecha</b>: traslada las herramientas al panel lateral derecho (pestaña <b>🔧 Herramientas</b>) para liberar espacio vertical; con <b>⇲ Abajo</b> vuelven al panel inferior. La posición se recuerda entre sesiones.</li>
               <li><b>⚙ Ajustes</b>: dispositivos, IA, tema, aplicación y este manual.</li>
             </ul>
             <p class="muted">Cada panel se abre y se cierra desde su botón; la app recuerda el ancho del panel lateral y qué secciones plegaste.</p>
+          </details>
+
+          <details><summary>⌨️ Atajos de teclado y paleta de comandos</summary>
+            <ul>
+              <li><b>Ctrl/⌘+K</b>: abre la paleta de comandos. Escribe (recarga, reinicio, informe, enlaces, CSS, rutas…) y pulsa <b>Enter</b>. Con las flechas eliges y con <b>Esc</b> cierras.</li>
+              <li><b>Ctrl/⌘+R</b>: recarga las vistas. <b>Ctrl/⌘+B</b>: muestra u oculta el panel inferior. <b>Ctrl/⌘+Shift+D</b>: mueve las herramientas entre el panel inferior y el lateral.</li>
+              <li><b>F12</b>: abre o cierra las DevTools. <b>Ctrl/⌘+1…6</b>: salta a Mensajes, Red, Enlaces, Rutas, Historial o Herramientas.</li>
+            </ul>
+          </details>
+
+          <details><summary>💾 Almacenamiento y 📋 Auditoría</summary>
+            <ul>
+              <li><b>💾 Almacenamiento</b>: cookies, <code>localStorage</code> y <code>sessionStorage</code> de la vista seleccionada, con opción de borrar cada elemento o limpiarlos todos. Útil cuando una sesión no se cierra o queda un dato de otra versión.</li>
+              <li><b>📋 Auditoría</b>: revisa la página y lista los problemas con su corrección: título, meta descripción, viewport, <code>lang</code>, canonical, Open Graph, favicon, jerarquía de encabezados, imágenes sin <code>alt</code>, enlaces y botones sin nombre accesible, campos de formulario sin etiqueta, <code>autocomplete</code> ausente, scripts por HTTP y manifiesto PWA.</li>
+              <li>La auditoría comprueba también <code>robots.txt</code> y <code>sitemap.xml</code> del servidor, y con IA conectada offers <b>💡 Revisión con IA</b>, que prioriza los hallazgos y propone el código.</li>
+              <li><b>Comparar dispositivos</b>: contrasta dos vistas (elementos, encabezados, formularios, imágenes, si desbordan y qué media queries se activan en cada una) para ver de un vistazo qué cambia según el ancho.</li>
+            </ul>
+          </details>
+
+          <details><summary>🖼 Comparar capturas y proyectos recientes</summary>
+            <ul>
+              <li><b>🧰 Herramientas → 🔍 Comparar capturas</b>: guarda la captura de cada vista y la compara con la anterior. La imagen de diferencias (en rojo) se guarda en <code>.liveproject/screenshots/</code> y el informe indica qué porcentaje de cada pantalla cambió. La primera vez solo fija la captura base.</li>
+              <li><b>🕘</b> (en la barra superior): los proyectos abiertos recientemente, para saltar de uno a otro sin buscar la carpeta.</li>
+              <li><b>🧰 Herramientas → 📷 Captura</b> sigue guardando una imagen de cada vista con fecha en la carpeta <code>screenshots/</code>.</li>
+            </ul>
+          </details>
+
+          <details><summary>🌐 Emulación por dispositivo (red, CPU y tema)</summary>
+            <ul>
+              <li>Cada dispositivo tiene un botón <b>🌐</b> en su título: abre un menú para <b>emular</b> esa vista.</li>
+              <li><b>Red</b>: sin límite, <b>3G</b>, <b>4G</b> o <b>sin conexión</b>. Ves de inmediato cómo carga tu web con datos lentos.</li>
+              <li><b>CPU</b>: ×1, ×4 o ×6 (más lenta), para ver el efecto de un JavaScript pesado.</li>
+              <li><b>Tema</b>: fuerza <code>prefers-color-scheme</code> a claro u oscuro; <b>Movimiento</b>: fuerza <code>prefers-reduced-motion</code>; <b>Colores</b>: activa <code>forced-colors</code>.</li>
+              <li>La emulación afecta <b>solo a esa vista</b>: puedes comparar un móvil con 3G y un monitor con 4G a la vez. El botón muestra un resumen (<i>🌐 3G 4× 🌙</i>).</li>
+              <li>Si abres las DevTools de esa vista, Chromium toma el control de la emulación (usa su propio panel de <i>throttling</i>); al cerrarlas, LiveProject la vuelve a aplicar.</li>
+            </ul>
           </details>
 
           <details><summary>📱 Dispositivos y rotación (vertical / horizontal)</summary>
@@ -303,6 +424,10 @@
               <li><code>path</code>: ruta que se abre al inicio. <code>ignore</code>: carpetas que no provocan recarga. <code>delay</code>: espera (ms) antes de recargar.</li>
             </ul>
             <p class="muted">Capturas, sesiones e informes se guardan en <code>&lt;proyecto&gt;/.liveproject/</code>; añádelo a tu <code>.gitignore</code>. La pestaña <b>Servidor</b> del panel inferior muestra la salida del proceso.</p>
+            <ul>
+              <li>En <b>Servidor</b> puedes filtrar la salida, activar el desplazamiento automático, limpiarla y <b>enviarle texto</b> al proceso (stdin) para responder a sus preguntas —por ejemplo, confirmar una migración de Django o de Laravel.</li>
+              <li>En <b>Ajustes → Proyecto</b> ves el comando con el que se arranca el servidor y puedes cambiarlo o partir de una plantilla (PHP, Laravel, Django, Flask, Node/Vite, Next.js, sitio estático o servidor ya en marcha). Al guardar se escribe <code>.liveproject.json</code> y el servidor se reinicia.</li>
+            </ul>
           </details>
 
           <details><summary>✨ Inspector inteligente</summary>
@@ -312,6 +437,9 @@
               <li><b>🎯 Elegir en la página</b>: haz clic en la vista y se selecciona el elemento. Al pasar el ratón por el árbol, se resalta en la página.</li>
               <li>A la derecha, un resumen: problemas de accesibilidad, responsive y contraste, paleta de colores y esquema de encabezados.</li>
               <li>Con <b>Analizar al recargar</b> se actualiza solo. Elige el dispositivo a inspeccionar en el selector <i>Dispositivo</i>.</li>
+              <li>El botón <b>📝 Abrir en el editor</b> abre en tu editor el fichero del proyecto que corresponde a la página.</li>
+              <li>Las <b>DevTools</b> se pueden ampliar a todo el espacio de trabajo con <b>⛶ Ampliar</b>.</li>
+              <li>En la barra de rendimiento, cada dispositivo muestra una <b>minigráfica</b> con la evolución de su nota entre recargas: si la línea baja, tu último cambio ha empeorado la web.</li>
             </ul>
           </details>
 
@@ -320,6 +448,7 @@
               <li><b>DevTools</b>: las herramientas reales de Chromium (Elements, Console, Sources, Network…) acopladas al dispositivo elegido.</li>
               <li><b>CSS responsive</b>: pulsa <b>▶ Analizar dispositivos activos</b> y se revisa cada pantalla con su tamaño real: desbordes, anchos fijos, objetivos táctiles pequeños, tipografía, imágenes, <code>100vh</code>, media queries… Cada hallazgo propone una corrección y, al pulsarlo, resalta el elemento en la página.</li>
               <li>Con IA conectada aparecen <b>Corregir con IA</b> y <b>💡 Revisión con IA</b>, que prioriza los problemas y propone el CSS corregido.</li>
+              <li>Las cuatro herramientas (Inspector inteligente, DevTools, CSS responsive y Servidor) viven en el panel inferior. Con el botón <b>⇱ Derecha</b> pasan al panel lateral derecho, como la pestaña <b>🔧 Herramientas</b>, y el escenario gana espacio vertical; con <b>⇲ Abajo</b> regresan abajo.</li>
             </ul>
           </details>
 
@@ -329,6 +458,7 @@
               <li>Cada mensaje lleva etiqueta de lenguaje y color por gravedad (rojo error, ámbar aviso, azul nota). Los repetidos se agrupan con un contador.</li>
               <li>Filtra por gravedad o por lenguaje (clic en la etiqueta). Pulsa el título para ver el detalle completo.</li>
               <li>Con IA conectada, <b>💡 Explicar con IA</b> te dice la causa y la solución. La casilla <i>Explicar errores automáticamente</i> lo hace sola con IA local (máx. 20 por sesión).</li>
+              <li>Por defecto solo se recogen errores y avisos. Si marcas <b>Mostrar también console.log / info</b> aparecen también los mensajes informativo de la página (pueden ser muchos).</li>
             </ul>
           </details>
 
@@ -337,6 +467,8 @@
               <li>Todas las peticiones de cada vista: método, estado, tipo, tamaño, tiempo y cabeceras clave. Pulsa una fila para ver el detalle.</li>
               <li>Filtra por tipo o texto de URL, o activa <b>Solo fallos</b>. Los 4xx/5xx y los fallos de red se añaden también a <i>Mensajes</i>.</li>
               <li><b>Conservar al recargar</b> mantiene el historial entre recargas.</li>
+              <li><b>Cascada</b>: cambia la lista por una línea de tiempo (tipo waterfall de DevTools) con cada petición en su instante y su duración. Pulsa <b>Lista</b> para volver.</li>
+              <li><b>Exportar HAR</b>: guarda las peticiones en <code>.liveproject/reports/</code> en formato HAR, que se puede abrir en Chrome DevTools, Charles o Fiddler.</li>
             </ul>
           </details>
 
@@ -350,7 +482,9 @@
               <li><b>🧭 Explorar</b> vuelve a recorrer el proyecto; la casilla <i>Enlaces de la página</i> añade también los enlaces de cada vista al cargarlas.</li>
               <li><b>Clic en una ruta</b>: todas las vistas navegan a ella (también en modo completo). <b>Shift+clic</b>: solo la vista elegida en el inspector.</li>
               <li><b>✔</b> comprueba cada ruta con HTTP y muestra su código: verde (2xx), ámbar (redirección), rojo (4xx/5xx o sin conexión). Las rutas con parámetros (<code>/users/:id</code>) se marcan como <i>parámetro</i> y no se comprueban.</li>
+              <li>Pulsa <b>📱</b> en una fila para ver su <b>código QR</b> y abrirla en el móvil (si la red local está activa, el QR apunta a la dirección de la red).</li>
               <li>Cada fila indica el origen: fichero y línea cuando procede, o si vino de la página o de una visita. Filtra por ruta, fichero o etiqueta con el cuadro de texto.</li>
+              <li><b>Abrir en el editor</b>: pulsa el nombre del fichero (subrayado) y se abre en VS Code, VSCodium, Sublime, Zed o el editor del sistema, en la línea exacta de la ruta. Puedes fijar el editor con la variable de entorno <code>LIVEPROJECT_EDITOR</code>.</li>
             </ul>
           </details>
 
@@ -424,13 +558,29 @@
     <div id="lan-body"></div>
     <div class="row-actions dlg-foot"><button type="button" id="lan-toggle" class="primary"></button></div>
   </dialog>
+  <dialog id="qr">
+    <button type="button" id="qr-x" class="dlg-x" title="Cerrar (Esc)">✕</button>
+    <h3 class="lan-title" id="qr-title">📱 Abrir en el móvil</h3>
+    <div id="qr-body"></div>
+  </dialog>
   <div id="toast" hidden></div>
+  <div id="palette" hidden>
+    <div class="pal-box" id="pal-box">
+      <input id="pal-input" type="text" placeholder="Escribe un comando…" spellcheck="false" autocomplete="off">
+      <div id="pal-list"></div>
+      <div class="pal-foot muted">↑ ↓ para moverse · Enter para ejecutar · Esc para cerrar</div>
+    </div>
+  </div>
   <script src="vendor/qrcode.js"></script>
   <script src="messages.js"></script>
   <script src="net.js"></script>
   <script src="links.js"></script>
   <script src="routes.js"></script>
   <script src="csslint.js"></script>
+  <script src="emulate.js"></script>
+  <script src="cmd.js"></script>
+  <script src="storage.js"></script>
+  <script src="audit.js"></script>
   <script src="sessions.js"></script>
   <script src="report.js"></script>
   <script src="lanui.js"></script>

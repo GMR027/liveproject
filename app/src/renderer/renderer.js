@@ -13,6 +13,10 @@ let fullId = null;     // dispositivo mostrado en modo completo (null = desactiv
 let zoomed = null;     // vista ampliada a pantalla grande
 const rotated = new Set(); // ids de dispositivos girados a horizontal
 let netPending = [];   // peticiones de vistas que aún no han emitido dom-ready (no se conoce su webContents)
+let toolsDock = 'bottom'; // dónde viven las herramientas: 'bottom' (panel inferior) o 'side' (panel lateral derecho)
+let dtMaximized = false;  // DevTools a pantalla completa
+
+const TOOL_PANES = ['tab-smart', 'tab-inspector', 'tab-csslint', 'tab-logs', 'tab-storage', 'tab-audit'];
 
 const UA_MOBILE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 const TYPES = { phone: 'Teléfono', tablet: 'Tableta', laptop: 'Portátil', desktop: 'Monitor' };
@@ -40,14 +44,75 @@ function toast(msg) {
   toast.t = setTimeout(() => { t.hidden = true; }, 4000);
 }
 
-function log({ text, stream }) {
+/* ---------------- salida del servidor ---------------- */
+const logBuf = [];   // { text, stream }
+let logFilter = '';
+let logFollow = true;
+
+// Convierte los códigos de color ANSI del servidor en HTML (muchos frameworks los emiten).
+const ANSI_COLORS = {
+  30: '#6b7280', 31: '#ef6b6b', 32: '#4cc38a', 33: '#e8c95a', 34: '#6c8cff', 35: '#c084fc', 36: '#3cc4d6', 37: '#eceefb',
+  90: '#9b9fc4', 91: '#ff8a8a', 92: '#7ef0b0', 93: '#ffe08a', 94: '#9db0ff', 95: '#e0b0ff', 96: '#7fe6f5', 97: '#ffffff'
+};
+function ansiHtml(text) {
+  const esc = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return esc.replace(/\x1b\[([0-9;]*)m/g, (_m, codes) => {
+    const ns = codes.split(';').map((n) => parseInt(n, 10)).filter((n) => !Number.isNaN(n));
+    if (!ns.length || ns.includes(0)) return '</span>';
+    let color = null;
+    let bold = false;
+    for (const n of ns) {
+      if (n === 1) bold = true;
+      else if (n === 22) bold = false;
+      else if (n === 39) color = null;
+      else if (ANSI_COLORS[n]) color = ANSI_COLORS[n];
+    }
+    return `<span style="color:${color || 'inherit'};${bold ? 'font-weight:700;' : ''}">`;
+  });
+}
+
+function logAppend({ text, stream }) {
+  logBuf.push({ text, stream });
+  while (logBuf.length > 2000) logBuf.shift();
+  if (logFilter) { renderLog(); return; }
   const out = $('log-out');
   const span = document.createElement('span');
   span.className = stream || '';
-  span.textContent = text;
+  span.innerHTML = ansiHtml(text);
   out.appendChild(span);
   while (out.childNodes.length > 2000) out.removeChild(out.firstChild);
-  $('tab-logs').scrollTop = $('tab-logs').scrollHeight;
+  if (logFollow) out.scrollTop = out.scrollHeight;
+}
+
+function renderLog() {
+  const out = $('log-out');
+  out.textContent = '';
+  const q = logFilter.toLowerCase();
+  for (const l of logBuf) {
+    if (q && !l.text.toLowerCase().includes(q)) continue;
+    const span = document.createElement('span');
+    span.className = l.stream || '';
+    span.innerHTML = ansiHtml(l.text);
+    out.appendChild(span);
+  }
+  if (logFollow) out.scrollTop = out.scrollHeight;
+}
+
+function initLogBar() {
+  $('log-filter').oninput = (e) => { logFilter = e.target.value.trim(); renderLog(); };
+  $('log-follow').onchange = (e) => { logFollow = e.target.checked; };
+  $('log-clear').onclick = () => { logBuf.length = 0; $('log-out').textContent = ''; };
+  const send = async () => {
+    const inp = $('log-input');
+    const text = inp.value.trim();
+    if (!text) return;
+    const r = await window.liveproject.serverInput(text);
+    inp.value = '';
+    if (!r || !r.ok) toast('El servidor no acepta entrada (arrácalo con un comando propio)');
+    else { logAppend({ text: `› ${text}\n`, stream: 'info' }); }
+  };
+  $('log-send').onclick = send;
+  $('log-input').onkeydown = (e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } };
 }
 
 /* ---------------- marcos de dispositivo ---------------- */
@@ -124,6 +189,7 @@ function addFrame(device) {
   f.zoomBtn.textContent = '⛶ Ampliar';
   f.zoomBtn.title = 'Ver este dispositivo en pantalla grande con su marco (Esc para salir)';
   f.zoomBtn.onclick = () => setZoom(zoomed === f ? null : f);
+  Emulate.mount(f);
   f.fit = el('div', 'fit', f.wrap);
   f.deviceEl = el('div', `device ${device.type}`, f.fit);
   const bezel = el('div', 'bezel', f.deviceEl);
@@ -142,6 +208,7 @@ function addFrame(device) {
     try { f.wcId = f.view.getWebContentsId(); } catch { /* sin adjuntar */ }
     if (netPending.length) feedNet([]);
     if (device.id === inspectId && !inspected) attachInspector();
+    Emulate.onReady(f);
   });
   for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-fail-load', 'did-finish-load']) f.view.addEventListener(ev, updateBack);
   f.view.addEventListener('did-navigate', (e) => {
@@ -271,6 +338,8 @@ function rebuildFrames() {
 }
 
 /* ---------------- inspector (DevTools reales de Chromium) ---------------- */
+let refreshCmpDevices = null;
+
 function refreshTargets() {
   const sel = $('inspect-target');
   sel.textContent = '';
@@ -283,10 +352,12 @@ function refreshTargets() {
   if (!inspected) attachInspector();
   if (activeTab === 'smart' && sel.value !== refreshTargets.last) Smart.reset();
   refreshTargets.last = sel.value;
+  if (refreshCmpDevices) refreshCmpDevices();
 }
 
 function paneBounds() {
-  const r = $('tab-inspector').getBoundingClientRect();
+  const box = dtMaximized ? $('workspace') : $('dt-content');
+  const r = box.getBoundingClientRect();
   return { x: Math.round(r.x), y: Math.round(r.y), width: Math.max(1, Math.round(r.width)), height: Math.max(1, Math.round(r.height)) };
 }
 
@@ -299,18 +370,18 @@ function detachInspector() {
 }
 
 async function attachInspector() {
-  if (inspected || $('bottom').hidden || activeTab !== 'devtools') return;
+  if (inspected || !toolsVisible() || activeTab !== 'devtools') return;
   const f = frames.get(inspectId);
   if (!f || !f.ready) return;
   const targetId = f.view.getWebContentsId();
   inspected = { targetId };
-  $('tab-inspector').textContent = '';
+  $('dt-content').textContent = '';
   await window.liveproject.devtoolsShow(targetId, paneBounds());
 }
 
 function switchInspector(id) {
   detachInspector();
-  $('tab-inspector').textContent = '';
+  $('dt-content').textContent = '';
   inspectId = id;
   $('inspect-target').value = id;
   Perf.render();
@@ -325,12 +396,65 @@ function setTab(tab) {
   $('tab-inspector').hidden = tab !== 'devtools';
   $('tab-csslint').hidden = tab !== 'csslint';
   $('tab-logs').hidden = tab !== 'logs';
+  $('tab-storage').hidden = tab !== 'storage';
+  $('tab-audit').hidden = tab !== 'audit';
   $('target-label').hidden = tab === 'logs' || tab === 'csslint';
   if (tab === 'devtools') attachInspector(); else detachInspector();
   if (tab === 'smart') Smart.analyze();
 }
 
+/* ---------------- herramientas: panel inferior ⇄ panel lateral derecho ---------------- */
+// ¿Están visibles las herramientas ahora mismo (están en el panel inferior o en el lateral)?
+function toolsVisible() {
+  if (toolsDock === 'side') return !$('messages').hidden && !$('side-tools').hidden;
+  return !$('bottom').hidden;
+}
+
+// Mueve la barra y los paneles de herramientas al contenedor indicado, conservando su estado.
+function mountTools(barParent, paneParent) {
+  const bar = $('bottom-bar');
+  if (bar.parentNode !== barParent) barParent.appendChild(bar);
+  else barParent.insertBefore(bar, barParent.firstElementChild);
+  for (const id of TOOL_PANES) {
+    const p = $(id);
+    if (p.parentNode !== paneParent) paneParent.appendChild(p);
+  }
+}
+
+// Traslada las herramientas al panel lateral derecho (libera espacio vertical) o de vuelta abajo.
+function dockTools(to) {
+  toolsDock = to;
+  if (to === 'side') {
+    mountTools($('tools-bar'), $('tools-host'));
+    $('bottom').hidden = true;
+    $('splitter').hidden = true;
+    $('btn-panel').classList.remove('active');
+    $('btn-panel').title = 'Traer las herramientas al panel inferior';
+    $('btn-dock').textContent = '⇲ Abajo';
+    $('btn-dock').title = 'Devolver las herramientas al panel inferior';
+    document.body.classList.add('tools-side');
+    showSide(true);
+    setSide('tools');
+  } else {
+    mountTools($('bottom'), $('bottom'));
+    $('bottom').hidden = false;
+    $('splitter').hidden = false;
+    $('btn-panel').classList.add('active');
+    $('btn-panel').title = 'Mostrar/ocultar panel inferior';
+    $('btn-dock').textContent = '⇱ Derecha';
+    $('btn-dock').title = 'Colocar las herramientas en el panel lateral derecho y liberar espacio';
+    document.body.classList.remove('tools-side');
+    // el panel lateral no puede quedarse vacío: vuelve a Mensajes
+    const active = document.querySelector('.stab2.active');
+    if (active && active.dataset.side === 'tools') setSide('messages');
+  }
+  try { localStorage.setItem('lp-tools-dock', to); } catch { /* sin almacenamiento */ }
+  layout();
+  reportBounds();
+}
+
 function togglePanel(show) {
+  if (toolsDock === 'side') { dockTools('bottom'); return; }
   const bottom = $('bottom');
   bottom.hidden = !show;
   $('splitter').hidden = !show;
@@ -358,6 +482,63 @@ function initSplitter() {
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
   });
+}
+
+/* ---------------- atajos de teclado y paleta de comandos ---------------- */
+const SIDE_TABS = ['messages', 'net', 'links', 'routes', 'history', 'tools'];
+
+function initShortcuts() {
+  document.addEventListener('keydown', (e) => {
+    const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+    const mod = e.ctrlKey || e.metaKey;
+
+    if (mod && e.key.toLowerCase() === 'k') { e.preventDefault(); Cmd.isOpen() ? Cmd.close() : Cmd.open(); return; }
+    if (Cmd.isOpen()) return;
+
+    // Ctrl/Cmd+R: recargar las vistas (no la ventana de la app)
+    if (mod && e.key.toLowerCase() === 'r' && !e.shiftKey) { e.preventDefault(); reloadAll(); toast('Vistas recargadas'); return; }
+    if (mod && e.key.toLowerCase() === 'b') { e.preventDefault(); togglePanel($('bottom').hidden); return; }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      dockTools(toolsDock === 'side' ? 'bottom' : 'side');
+      return;
+    }
+    if (e.key === 'F12') { e.preventDefault(); setTab(activeTab === 'devtools' ? 'smart' : 'devtools'); return; }
+    if (mod && !e.shiftKey && /^[1-6]$/.test(e.key)) {
+      e.preventDefault();
+      const name = SIDE_TABS[parseInt(e.key, 10) - 1];
+      showSide(true);
+      setSide(name);
+      return;
+    }
+    if (e.key === 'Escape' && !inField && zoomed) setZoom(null);
+  });
+}
+
+function initCommands() {
+  const cmds = [
+    { title: 'Recargar todas las vistas', hint: 'Ctrl+R', run: () => { reloadAll(); toast('Vistas recargadas'); } },
+    { title: 'Reiniciar el servidor', run: () => window.liveproject.restart() },
+    { title: 'Abrir carpeta de proyecto...', run: () => window.liveproject.chooseFolder() },
+    { title: 'Capturar todas las vistas', run: takeShots },
+    { title: 'Comparar capturas con la anterior', run: compareShots },
+    { title: 'Exportar informe (HTML y Markdown)', run: exportReport },
+    { title: 'Exportar la red en formato HAR', run: () => $('net-har').click() },
+    { title: 'Comprobar enlaces', run: () => { showSide(true); setSide('links'); $('links-run').click(); } },
+    { title: 'Explorar rutas del proyecto', run: () => { showSide(true); setSide('routes'); $('routes-run').click(); } },
+    { title: 'Analizar CSS responsive', run: () => { dockTools('bottom'); setTab('csslint'); $('csl-run').click(); } },
+    { title: 'Analizar la pagina (inspector inteligente)', run: () => { dockTools('bottom'); setTab('smart'); Smart.analyze(); } },
+    { title: 'Abrir las DevTools', hint: 'F12', run: () => { dockTools('bottom'); setTab('devtools'); } },
+    { title: 'Mover las herramientas de sitio', hint: 'Ctrl+Shift+D', run: () => dockTools(toolsDock === 'side' ? 'bottom' : 'side') },
+    { title: 'Mostrar u ocultar el panel inferior', hint: 'Ctrl+B', run: () => togglePanel($('bottom').hidden) },
+    { title: 'Mostrar u ocultar el panel lateral', run: () => showSide($('messages').hidden) },
+    { title: 'Ajustes: Dispositivos', run: openSettings },
+    { title: 'Ajustes: Inteligencia artificial', run: openAiSettings },
+    { title: 'Ajustes: Tema', run: () => { openSettings(); document.querySelector('[data-stab=theme]').click(); } },
+    { title: 'Manual de usuario', hint: 'Ayuda', run: openManual },
+    { title: 'Alternar tema claro / oscuro', run: () => { theme.mode = theme.mode === 'dark' ? 'light' : 'dark'; applyTheme(); } }
+  ];
+  Cmd.init({ commands: cmds });
 }
 
 /* ---------------- ajustes de dispositivos ---------------- */
@@ -481,7 +662,10 @@ function applyState(s) {
     Sessions.start(s.root.split('/').pop());
     Messages.reset(); Net.reset(); Links.reset(); CssLint.reset(); Routes.reset(s.root);
     netPending = [];
+    logBuf.length = 0;
     $('log-out').textContent = '';
+    // la lista de proyectos recientes cambia al abrir uno
+    window.liveproject.appInfo().then((info) => { recentProjects = info.settings.recent || []; renderRecent(); }).catch(() => {});
   }
   if (s.root) $('project-name').textContent = s.root.split('/').pop() + (s.name ? ` · ${s.name}` : '');
   const st = $('status');
@@ -511,6 +695,54 @@ async function takeShots() {
   toast(`${r.saved.length} captura(s) guardadas en ${r.dir}`);
 }
 
+// Compara la captura actual con la anterior de cada vista y guarda la imagen de cambios.
+async function compareShots() {
+  const shots = [];
+  for (const f of frames.values()) {
+    if (f.ready) shots.push({ name: f.device.name, webContentsId: f.view.getWebContentsId() });
+  }
+  if (!shots.length) return toast('No hay vistas para comparar');
+  const r = await window.liveproject.compareScreenshots(shots);
+  const res = r.results || [];
+  const conBase = res.filter((x) => x.base);
+  if (!conBase.length) {
+    toast(`Captura base guardada en ${r.dir} (vuelve a capturar para ver las diferencias)`);
+    return;
+  }
+  const cambios = conBase.map((x) => `${x.device}: ${x.pct.toFixed(1)}%`).join(' · ');
+  toast(`Diferencias — ${cambios}`);
+  const first = conBase.find((x) => x.diff);
+  if (first) window.liveproject.showInFolder(first.diff);
+}
+
+// Proyectos recientes (guardados por el proceso principal).
+let recentProjects = [];
+function renderRecent() {
+  const box = $('recent-list');
+  if (!box) return;
+  box.textContent = '';
+  if (!recentProjects.length) {
+    const d = document.createElement('div');
+    d.className = 'menu-item muted';
+    d.textContent = 'Sin proyectos recientes';
+    box.appendChild(d);
+    return;
+  }
+  for (const p of recentProjects) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'menu-item';
+    b.title = p;
+    const name = p.split('/').filter(Boolean).pop() || p;
+    b.innerHTML = '<span>📁 </span>';
+    const s = document.createElement('span');
+    s.textContent = name;
+    b.appendChild(s);
+    b.onclick = () => { window.liveproject.openProject(p); };
+    box.appendChild(b);
+  }
+}
+
 /* ---------------- ajustes: inteligencia artificial ---------------- */
 let aiCfg = null;
 const GROUPS = { local: 'Local (gratis, privado)', api: 'API (pago por uso)', subscription: 'Suscripción (CLI oficial)' };
@@ -522,6 +754,7 @@ function setAiState(on) {
   Messages.setAi(on, aiCfg.providers[aiCfg.provider].group === 'local');
   Smart.setAi(on);
   CssLint.setAi(on);
+  Audit.setAi(on);
 }
 
 function aiStatus(text, ok) {
@@ -682,7 +915,7 @@ async function initAI() {
   document.querySelectorAll('.stab').forEach((b) => {
     b.onclick = () => {
       document.querySelectorAll('.stab').forEach((x) => x.classList.toggle('active', x === b));
-      for (const id of ['devices', 'ai', 'theme', 'app', 'manual']) $(`set-${id}`).hidden = b.dataset.stab !== id;
+      for (const id of ['devices', 'project', 'ai', 'theme', 'app', 'manual']) $(`set-${id}`).hidden = b.dataset.stab !== id;
       $('btn-save').hidden = b.dataset.stab !== 'devices';
     };
   });
@@ -698,6 +931,51 @@ async function initAI() {
     aiModels = t.models || [];
     renderModels();
   }
+}
+
+/* ---------------- ajustes: proyecto (comando del servidor) ---------------- */
+const PROJECT_PRESETS = [
+  ['PHP (servidor integrado)', { command: 'php -S 127.0.0.1:{port} -t {root}' }],
+  ['Laravel', { command: 'php artisan serve --host=127.0.0.1 --port={port}' }],
+  ['Django', { command: 'python3 manage.py runserver 127.0.0.1:{port}' }],
+  ['Flask', { command: 'flask run --port {port}' }],
+  ['Node / Vite', { command: 'npm run dev -- --port {port}' }],
+  ['Next.js', { command: 'npm run dev -- --port {port}' }],
+  ['Sitio estático', { command: 'python3 -m http.server {port} --directory {root}' }],
+  ['Servidor ya en marcha (XAMPP, Docker…)', { url: 'http://localhost:8080' }]
+];
+
+async function loadProjectConfig() {
+  const r = await window.liveproject.projectConfig();
+  const st = $('proj-state');
+  const ta = $('proj-json');
+  if (!r.ok) { st.textContent = 'No hay ningún proyecto abierto'; ta.value = ''; return; }
+  ta.value = r.text || '';
+  st.textContent = r.external
+    ? `Usando la dirección ${r.url} (servidor externo)`
+    : r.static ? `Sitio estático servido por LiveProject en ${r.url}` : `Comando actual: ${r.command}`;
+}
+
+function initProjectConfig() {
+  const sel = $('preset-project');
+  for (const [name] of PROJECT_PRESETS) {
+    const o = el('option', '', sel);
+    o.value = name;
+    o.textContent = name;
+  }
+  sel.onchange = () => {
+    const p = PROJECT_PRESETS.find(([n]) => n === sel.value);
+    if (p) $('proj-json').value = JSON.stringify(p[1], null, 2);
+    sel.value = '';
+  };
+  $('btn-reload-cfg').onclick = loadProjectConfig;
+  $('btn-save-cfg').onclick = async () => {
+    const r = await window.liveproject.projectConfigWrite($('proj-json').value);
+    if (!r.ok) return toast(r.message || 'No se pudo guardar');
+    toast('Configuración guardada: el servidor se reinicia');
+    loadProjectConfig();
+  };
+  loadProjectConfig();
 }
 
 /* ---------------- ajustes: tema ---------------- */
@@ -761,6 +1039,8 @@ async function checkUpdates(silent) {
 
 async function initApp() {
   const info = await window.liveproject.appInfo();
+  recentProjects = info.settings.recent || [];
+  renderRecent();
   $('app-version').textContent = info.version;
   initManual(info.version);
   $('app-kind').textContent = KINDS[info.kind] || '';
@@ -853,9 +1133,25 @@ function feedNet(batch) {
 
 function setSide(name) {
   document.querySelectorAll('.stab2').forEach((b) => b.classList.toggle('active', b.dataset.side === name));
-  for (const id of ['messages', 'net', 'links', 'routes', 'history']) $(`side-${id}`).hidden = id !== name;
+  for (const id of ['messages', 'net', 'links', 'routes', 'history', 'tools']) $(`side-${id}`).hidden = id !== name;
   if (name === 'history') Sessions.render();
   if (name === 'routes') Routes.show();
+  if (name === 'tools') {
+    // las herramientas se trasladan al panel lateral la primera vez que se abre esta pestaña
+    if (toolsDock === 'bottom') { dockTools('side'); return; }
+    if (activeTab === 'devtools') attachInspector(); else if (activeTab === 'smart') Smart.analyze();
+  } else if (toolsDock === 'side' && activeTab === 'devtools') {
+    detachInspector();   // las DevTools no pueden quedar flotando sobre otro panel
+  }
+}
+
+// Muestra u oculta el panel lateral derecho completo (mensajes, red, enlaces, rutas, historial y herramientas).
+function showSide(show) {
+  $('messages').hidden = !show;
+  $('side-splitter').hidden = !show;
+  $('btn-msgs').classList.toggle('active', show);
+  if (!show && toolsDock === 'side') detachInspector();
+  layout();
 }
 
 function initSideSplitter() {
@@ -896,7 +1192,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   devices = init.devices;
   window.liveproject.onState(applyState);
   window.liveproject.onLog((l) => {
-    log(l);
+    logAppend(l);
     if (l.stream !== 'info') Messages.feedText(l.text, 'servidor', l.stream);
   });
   window.liveproject.onReload(reloadAll);
@@ -913,31 +1209,53 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   $('btn-back').onclick = backAll;
   $('btn-restart').onclick = () => window.liveproject.restart();
   $('btn-shot').onclick = takeShots;
+  $('btn-compare').onclick = compareShots;
   $('btn-settings').onclick = openSettings;
   $('btn-help').onclick = openManual;
   $('btn-rotate-all').onclick = rotateAll;
   $('chk-full').onchange = (e) => setFull(e.target.checked);
   $('full-sel').onchange = (e) => { fullId = e.target.value; layout(); };
   initChrome();
-  $('btn-panel').onclick = () => togglePanel($('bottom').hidden);
+  $('btn-panel').onclick = () => {
+    if (toolsDock === 'side') { dockTools('bottom'); return; }
+    togglePanel($('bottom').hidden);
+  };
   $('btn-close-panel').onclick = () => togglePanel(false);
+  $('btn-dock').onclick = () => dockTools(toolsDock === 'side' ? 'bottom' : 'side');
+  $('dt-max').onclick = () => {
+    dtMaximized = !dtMaximized;
+    $('dt-max').textContent = dtMaximized ? '⛶ Restaurar' : '⛶ Ampliar';
+    $('dt-max').classList.toggle('active', dtMaximized);
+    reportBounds();
+  };
+  $('dt-dev').onclick = () => { setSide('messages'); switchInspector(inspectId); toast('Usa el selector «Dispositivo» de la barra para cambiar de vista'); };
+  $('smart-open').onclick = async () => {
+    if (!currentUrl) return toast('Abre un proyecto primero');
+    const r = await window.liveproject.editorOpenUrl(currentUrl);
+    if (!r || !r.ok) toast((r && r.message) || 'No se pudo abrir el editor');
+    else toast(`Abierto en ${r.editor}`);
+  };
   $('inspect-target').onchange = (e) => switchInspector(e.target.value);
   document.querySelectorAll('#bottom-bar .tab').forEach((b) => { b.onclick = () => setTab(b.dataset.tab); });
   $('chk-fit').onchange = layout;
   window.addEventListener('resize', layout);
   new ResizeObserver(layout).observe(stage);
-  new ResizeObserver(reportBounds).observe($('tab-inspector'));
+  new ResizeObserver(reportBounds).observe($('dt-content'));
   window.addEventListener('resize', reportBounds);
   $('settings').addEventListener('close', () => window.liveproject.devtoolsVisible(true));
   Perf.init({ bar: $('perfbar'), getSelected: () => inspectId, onSelect: (id) => switchInspector(id) });
   initSplitter();
+  initLogBar();
+  initShortcuts();
+  initCommands();
   initSettings();
+  initProjectConfig();
   initTheme();
   initApp();
   await initAI();
   Messages.init({
     badge: $('msg-badge'), counts: $('msg-count'), langs: $('msg-langs'), list: $('msg-list'),
-    sevSelect: $('msg-sev'), clearBtn: $('msg-clear'), autoBox: $('msg-auto'), toast, openAi: openAiSettings
+    sevSelect: $('msg-sev'), clearBtn: $('msg-clear'), autoBox: $('msg-auto'), logsBox: $('msg-logs'), toast, openAi: openAiSettings
   });
   Smart.init({
     getView: () => { const f = frames.get(inspectId); return f && f.ready ? f.view : null; }, deviceName: () => (frames.get(inspectId) || { device: {} }).device.name || '',
@@ -948,6 +1266,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   Net.init({
     list: $('net-list'), summary: $('net-summary'), badge: $('net-badge'), typeSel: $('net-type'), search: $('net-search'),
     failBox: $('net-fail'), keepBox: $('net-keep'), clearBtn: $('net-clear'),
+    wfBtn: $('net-wf'), harBtn: $('net-har'), toast,
     deviceOf: (wc) => { const f = frameByWc(wc); return f ? f.device.name : null; },
     onFail: (r) => Messages.fromNetwork(r.device, r.method, r.url, r.status, r.error)
   });
@@ -961,8 +1280,23 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
     btn: $('routes-run'), checkBtn: $('routes-check'), clearBtn: $('routes-clear'),
     search: $('routes-search'), pageBox: $('routes-page'),
     views: () => [...frames.values()], selected: () => inspectId,
-    visible: () => !$('side-routes').hidden,
+    visible: () => !$('side-routes').hidden, toast,
+    root: () => lastRoot,
     navigate: navigateTo, abs: routeUrl, baseUrl: () => currentUrl
+  });
+  Storage.init({
+    list: $('stg-list'), status: $('stg-status'), btn: $('stg-run'), clearBtn: $('stg-clear'),
+    getView: () => viewOf(inspectId), toast
+  });
+  Audit.init({
+    list: $('aud-list'), status: $('aud-status'), btn: $('aud-run'), aiBtn: $('aud-ai'), aiOut: $('aud-ai-out'),
+    getView: () => viewOf(inspectId), deviceName: () => (frames.get(inspectId) || { device: {} }).device.name || '',
+    baseUrl: () => currentUrl, openAi: openAiSettings, toast,
+    cmpBtn: $('cmp-run'), cmpA: $('cmp-a'), cmpB: $('cmp-b'),
+    devices: () => devices.filter((d) => d.enabled),
+    frameById: (id) => frames.get(id),
+    deviceNameOf: (id) => (frames.get(id) || { device: {} }).device.name || id,
+    onDevices: (cb) => { refreshCmpDevices = cb; }
   });
   CssLint.init({
     list: $('csl-list'), status: $('csl-status'), btn: $('csl-run'), aiBtn: $('csl-ai'), aiOut: $('csl-ai-out'), badge: $('csl-badge'),
@@ -976,6 +1310,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
     }
   });
   Sessions.init({ list: $('hist-list'), refreshBtn: $('hist-refresh'), reportBtn: $('hist-report'), onReport: exportReport, hasProject: () => !!lastRoot });
+  Emulate.init({ frames: () => [...frames.values()], toast });
   Lan.init({
     btn: $('btn-lan'), count: $('lan-count'), dialog: $('lan'), body: $('lan-body'), toggle: $('lan-toggle'), close: $('lan-x'),
     pathOf: () => { try { const u = new URL(currentUrl); return u.pathname + u.search; } catch { return '/'; } }, toast
@@ -983,12 +1318,11 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   document.querySelectorAll('.stab2').forEach((b) => { b.onclick = () => setSide(b.dataset.side); });
   $('btn-report').onclick = exportReport;
   initSideSplitter();
-  $('btn-msgs').onclick = () => {
-    const hide = !$('messages').hidden;
-    $('messages').hidden = hide;
-    $('side-splitter').hidden = hide;
-    $('btn-msgs').classList.toggle('active', !hide);
-    layout();
-  };
+  $('btn-msgs').onclick = () => showSide($('messages').hidden);
   setTab('smart');
+  // restaurar la posición de las herramientas (abajo o en el panel lateral)
+  try {
+    const d = localStorage.getItem('lp-tools-dock');
+    if (d === 'side') dockTools('side');
+  } catch { /* sin almacenamiento */ }
 })();

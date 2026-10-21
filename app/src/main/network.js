@@ -4,7 +4,7 @@ const { session } = require('electron');
 // Solo hay un manejador por evento en webRequest, por eso se centraliza aquí.
 function startNetworkCapture(send) {
   const ses = session.fromPartition('persist:liveproject');
-  const pending = new Map(); // id -> { start, method, url, type, wc, size, mime, cache, enc }
+  const pending = new Map(); // id -> { start, method, url, type, wc, size, mime, cache, enc, reqH, resH }
   let batch = [];
   let timer = null;
 
@@ -15,13 +15,20 @@ function startNetworkCapture(send) {
     const k = Object.keys(h).find((x) => x.toLowerCase() === name);
     return k ? [].concat(h[k])[0] : '';
   };
+  // Todas las cabeceras (petición y respuesta) en el formato [{name, value}] que usa el HAR.
+  const headers = (h) => {
+    const out = [];
+    for (const [k, v] of Object.entries(h || {})) for (const val of [].concat(v)) out.push({ name: k, value: String(val) });
+    return out;
+  };
   const finish = (d, extra) => {
     const p = pending.get(d.id);
     if (!p) return;
     pending.delete(d.id);
     push({
       id: d.id, wc: p.wc, method: p.method, url: p.url, type: p.type, start: p.start, ms: Date.now() - p.start,
-      status: d.statusCode || 0, cache: !!d.fromCache, size: p.size, mime: p.mime, cc: p.cc, enc: p.enc, ...extra
+      status: d.statusCode || 0, cache: !!d.fromCache, size: p.size, mime: p.mime, cc: p.cc, enc: p.enc,
+      reqH: p.reqH || [], resH: p.resH || [], ...extra
     });
   };
 
@@ -32,6 +39,11 @@ function startNetworkCapture(send) {
     }
     cb({});
   });
+  ses.webRequest.onBeforeSendHeaders((d, cb) => {
+    const p = pending.get(d.id);
+    if (p) p.reqH = headers(d.requestHeaders);
+    cb({});
+  });
   ses.webRequest.onHeadersReceived((d, cb) => {
     const p = pending.get(d.id);
     if (p) {
@@ -40,6 +52,7 @@ function startNetworkCapture(send) {
       p.mime = header(d.responseHeaders, 'content-type').split(';')[0];
       p.cc = header(d.responseHeaders, 'cache-control');
       p.enc = header(d.responseHeaders, 'content-encoding');
+      p.resH = headers(d.responseHeaders);
     }
     cb({});
   });

@@ -50,6 +50,8 @@ const Perf = (() => {
   ];
 
   const results = new Map(); // deviceId -> { name, raw, scores, overall, at }
+  const history = new Map(); // deviceId -> [{ t, overall, lcp, cls, fcp }]
+  const MAX_HIST = 40;
   let ui = null;
   let selectCb = () => {};
   let selectedId = () => null;
@@ -76,8 +78,37 @@ const Perf = (() => {
     try {
       const raw = await view.executeJavaScript(`(${pagePerf.toString()})()`);
       results.set(id, { name, raw, ...compute(raw), at: Date.now() });
+      // historial para ver la evolución entre recargas
+      const h = history.get(id) || [];
+      h.push({ t: Date.now(), overall: results.get(id).overall, lcp: raw.lcp, cls: raw.cls, fcp: raw.fcp, load: raw.load });
+      while (h.length > MAX_HIST) h.shift();
+      history.set(id, h);
     } catch (e) { return; }
     render();
+  }
+
+  // Minigráfica del historial (SVG con la nota global de cada recarga).
+  function spark(id) {
+    const h = history.get(id) || [];
+    const vals = h.map((x) => (x.overall == null ? null : x.overall));
+    const good = vals.filter((v) => v != null);
+    if (good.length < 2) return '';
+    const w = 44;
+    const hgt = 13;
+    const min = Math.min(...good);
+    const max = Math.max(...good);
+    const span = Math.max(0.05, max - min);
+    const pts = vals.map((v, i) => {
+      if (v == null) return null;
+      const x = (i / Math.max(1, vals.length - 1)) * w;
+      const y = hgt - ((v - min) / span) * (hgt - 2) - 1;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).filter(Boolean);
+    const last = good[good.length - 1];
+    return `<svg class="spark" width="${w}" height="${hgt}" viewBox="0 0 ${w} ${hgt}" aria-hidden="true">
+      <polyline points="${pts.join(' ')}" fill="none" stroke="currentColor" stroke-width="1.2" opacity=".85"/>
+      <circle cx="${w - 0.5}" cy="${(hgt - ((last - min) / span) * (hgt - 2) - 1).toFixed(1)}" r="1.6" fill="currentColor"/>
+    </svg>`;
   }
 
   function render() {
@@ -98,7 +129,21 @@ const Perf = (() => {
       const dot = document.createElement('i');
       dot.style.background = x.overall === null ? '#666' : color(x.overall);
       chip.append(dot, document.createTextNode(`${x.name} ${x.overall === null ? '—' : Math.round(x.overall * 100)}`));
-      chip.title = 'Ver métricas de este dispositivo';
+      const sp = spark(id);
+      if (sp) {
+        const s = document.createElement('span');
+        s.className = 'spark-wrap';
+        s.innerHTML = sp;
+        chip.appendChild(s);
+      }
+      const h = history.get(id) || [];
+      if (h.length > 1) {
+        const first = h[0];
+        const delta = x.overall != null && first.overall != null ? Math.round((x.overall - first.overall) * 100) : null;
+        chip.title = `${h.length} medición(es) · ${delta == null ? '' : (delta >= 0 ? `+${delta}` : delta) + ' puntos desde la primera'}\nLCP ${x.raw.lcp == null ? '—' : Math.round(x.raw.lcp) + ' ms'} · CLS ${x.raw.cls}`;
+      } else {
+        chip.title = 'Ver métricas de este dispositivo';
+      }
       chip.onclick = () => selectCb(id);
       head.appendChild(chip);
     }

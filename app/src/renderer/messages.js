@@ -36,6 +36,7 @@ const Messages = (() => {
   let aiOn = false;
   let aiLocal = false;
   let autoExplain = (() => { try { return localStorage.getItem('lp-auto-explain') !== '0'; } catch { return true; } })();
+  let showLogs = (() => { try { return localStorage.getItem('lp-show-logs') === '1'; } catch { return false; } })();
   const AUTO_MAX = 20; // tope de explicaciones automáticas por sesión
   let autoCount = 0;
   const queue = [];
@@ -144,9 +145,14 @@ const Messages = (() => {
 
   function fromConsole(device, level, message, source, lineNo) {
     const lv = typeof level === 'string' ? level : ['verbose', 'info', 'warning', 'error'][level];
-    if ((lv !== 'error' && lv !== 'warning') || /Electron Security Warning/.test(message)) return;
+    const isErr = lv === 'error';
+    const isWarn = lv === 'warning';
+    // Por defecto solo se recogen errores y avisos; con la opción activa también los log/info.
+    if (!isErr && !isWarn && !(showLogs && (lv === 'info' || lv === 'verbose' || lv === 'debug'))) return;
+    if (/Electron Security Warning/.test(message)) return;
     const where = source ? ` (${source.split('/').pop()}:${lineNo})` : '';
-    const it = add({ lang: 'JavaScript', sev: lv === 'error' ? 'error' : 'warning', origin: device, line: `${message}${where}` });
+    const sev = isErr ? 'error' : isWarn ? 'warning' : 'notice';
+    const it = add({ lang: 'JavaScript', sev, origin: device, line: `${message}${where}` });
     return it;
   }
 
@@ -276,13 +282,21 @@ const Messages = (() => {
     return r;
   }
 
-  function init({ badge, counts, langs, list, sevSelect, clearBtn, autoBox, toast, openAi }) {
+  function init({ badge, counts, langs, list, sevSelect, clearBtn, autoBox, logsBox, toast, openAi }) {
     ui = { badge, counts, langs, list, toast };
     autoBox.checked = autoExplain;
     autoBox.onchange = () => {
       autoExplain = autoBox.checked;
       try { localStorage.setItem('lp-auto-explain', autoExplain ? '1' : '0'); } catch { /* sin almacenamiento */ }
     };
+    if (logsBox) {
+      logsBox.checked = showLogs;
+      logsBox.onchange = () => {
+        showLogs = logsBox.checked;
+        try { localStorage.setItem('lp-show-logs', showLogs ? '1' : '0'); } catch { /* sin almacenamiento */ }
+        render();
+      };
+    }
     openAiSettings = openAi || openAiSettings;
     sevSelect.onchange = () => { sevFilter = sevSelect.value; render(); };
     clearBtn.onclick = reset;

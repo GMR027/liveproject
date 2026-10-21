@@ -82,5 +82,5 @@ const Lan = (() => {
     render();
   }
 
-  return { init };
+  return { init, drawQr };
 })();

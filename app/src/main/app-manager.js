@@ -15,6 +15,7 @@ function saveSettings(patch) {
   const s = { ...loadSettings() };
   if (typeof patch.updateUrl === 'string') s.updateUrl = patch.updateUrl.trim();
   if (typeof patch.autoCheck === 'boolean') s.autoCheck = patch.autoCheck;
+  if (Array.isArray(patch.recent)) s.recent = patch.recent.slice(0, 12);
   fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
   fs.writeFileSync(settingsFile(), JSON.stringify(s, null, 2));
   return s;

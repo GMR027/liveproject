@@ -112,6 +112,18 @@ class ServerManager extends EventEmitter {
       try { process.kill(-proc.pid, 'SIGTERM'); } catch { clearTimeout(timer); resolve(); }
     });
   }
+
+  // Envía texto al proceso del servidor (stdin): sirve para responder a sus preguntas.
+  write(text) {
+    const proc = this.proc;
+    if (!proc || !proc.stdin || proc.stdin.destroyed) return false;
+    try {
+      proc.stdin.write(text.endsWith('\n') ? text : `${text}\n`);
+      return true;
+    } catch { return false; }
+  }
+
+  get running() { return !!this.proc; }
 }
 
 module.exports = { ServerManager, waitForServer };
