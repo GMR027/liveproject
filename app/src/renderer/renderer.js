@@ -4,7 +4,9 @@ const frames = new Map(); // device.id -> { device, wrap, fit, deviceEl, screen,
 let webviewPreload = '';
 let devices = [];
 let currentUrl = null;
+let viewUrl = null;     // página que se está viendo (se usa al crear una vista nueva)
 let ready = false;
+let browsing = false;   // la barra de direcciones ha abierto una página (aunque no haya proyecto)
 let inspectId = null;   // dispositivo inspeccionado
 let inspected = null;   // { targetId }
 let activeTab = 'smart';
@@ -202,7 +204,7 @@ function addFrame(device) {
   f.view.setAttribute('preload', webviewPreload);
   f.view.setAttribute('partition', 'persist:liveproject');
   if (isMobile(device)) f.view.setAttribute('useragent', UA_MOBILE);
-  if (currentUrl && ready) f.view.setAttribute('src', currentUrl);
+  if ((viewUrl || currentUrl) && (ready || browsing)) f.view.setAttribute('src', viewUrl || currentUrl);
   f.view.addEventListener('dom-ready', () => {
     f.ready = true;
     try { f.wcId = f.view.getWebContentsId(); } catch { /* sin adjuntar */ }
@@ -213,7 +215,9 @@ function addFrame(device) {
   for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-fail-load', 'did-finish-load']) f.view.addEventListener(ev, updateBack);
   f.view.addEventListener('did-navigate', (e) => {
     Routes.visited(e.url);          // las rutas que visitas se suman al panel «Rutas»
-    if (e.url) $('url').value = e.url;
+    if (e.url) viewUrl = e.url;
+    // no pisar lo que el usuario está escribiendo en la barra de direcciones
+    if (e.url && document.activeElement !== $('url')) $('url').value = e.url;
   });
   f.view.addEventListener('console-message', (e) => Messages.fromConsole(device.name, e.level, e.message, e.sourceId, e.line));
   f.view.addEventListener('did-fail-load', (e) => {
@@ -627,6 +631,43 @@ function routeUrl(route) {
   return base.origin + dir.replace(/\/$/, '') + (route.startsWith('/') ? route : `/${route}`);
 }
 
+/* ---------------- barra de direcciones ---------------- */
+// Acepta una URL completa (con ruta y parámetros), un dominio sin esquema o una ruta del sitio actual.
+function addressUrl(raw) {
+  let s = String(raw || '').trim();
+  if (!s) return null;
+  if (s.startsWith('//')) s = `https:${s}`;
+  else if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) {
+    if (/^[/?#]/.test(s) && (viewUrl || currentUrl)) s = new URL(s, viewUrl || currentUrl).href;
+    else s = `${/^(localhost|127\.|0\.0\.0\.0|\[::1\])(:\d+)?(\/|$)/i.test(s) ? 'http' : 'https'}://${s}`;
+  }
+  try {
+    const u = new URL(s);
+    return /^https?:$/.test(u.protocol) ? u.href : null;
+  } catch { return null; }
+}
+
+// Abre en todas las vistas la dirección escrita en la barra (también webs publicadas, sin tocar el proyecto).
+function openAddress() {
+  const url = addressUrl($('url').value);
+  if (!url) { toast('Escribe una dirección web válida (por ejemplo, https://mi-sitio.com/pagina)'); return; }
+  if (!lastRoot || !currentUrl) currentUrl = url; // sin proyecto abierto, la página pasa a ser la referencia
+  browsing = true;
+  viewUrl = url;
+  $('url').value = url;
+  navigateTo(url);
+  $('url').blur();
+}
+
+function initAddressBar() {
+  const input = $('url');
+  input.addEventListener('focus', () => input.select());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); openAddress(); }
+    else if (e.key === 'Escape') { input.value = viewUrl || currentUrl || ''; input.blur(); }
+  });
+}
+
 function navigateTo(route, onlyId) {
   if (!currentUrl) return toast('Abre un proyecto primero');
   let url;
@@ -635,10 +676,18 @@ function navigateTo(route, onlyId) {
   let n = 0;
   for (const f of list) {
     if (!f) continue;
-    try { f.view.setAttribute('src', url); n++; } catch { /* sin adjuntar */ }
+    let same = false;
+    try { same = f.view.getURL() === url; } catch { /* aún sin adjuntar */ }
+    try {
+      // Si ya está en esa página, Enter/el clic la recarga (si no, no cambiaría nada).
+      if (same) f.view.reload();
+      else f.view.setAttribute('src', url);
+      n++;
+    } catch { /* sin adjuntar */ }
   }
   if (!n) return toast('No hay vistas activas');
-  toast(`Abriendo ${route}`);
+  viewUrl = url;
+  toast(/^https?:/i.test(route) ? 'Abriendo la página en todas las vistas' : `Abriendo ${route}`);
 }
 
 // Retroceso manual: solo lo pide el usuario (p. ej. tras llegar a una página de error).
@@ -659,6 +708,7 @@ function backAll() {
 function applyState(s) {
   if (s.root && s.root !== lastRoot) {
     lastRoot = s.root;
+    browsing = false;
     Sessions.start(s.root.split('/').pop());
     Messages.reset(); Net.reset(); Links.reset(); CssLint.reset(); Routes.reset(s.root);
     netPending = [];
@@ -673,6 +723,7 @@ function applyState(s) {
   if (s.warning) toast(s.warning);
   if (s.url) {
     currentUrl = s.url;
+    viewUrl = s.url;
     $('url').value = s.url;
     ready = s.status === 'ready';
     rebuildFrames();
@@ -952,7 +1003,7 @@ async function loadProjectConfig() {
   if (!r.ok) { st.textContent = 'No hay ningún proyecto abierto'; ta.value = ''; return; }
   ta.value = r.text || '';
   st.textContent = r.external
-    ? `Usando la dirección ${r.url} (servidor externo)`
+    ? `Usando la dirección ${r.url}${r.path || ''} (servidor externo)`
     : r.static ? `Sitio estático servido por LiveProject en ${r.url}` : `Comando actual: ${r.command}`;
 }
 
@@ -1177,7 +1228,7 @@ function initSideSplitter() {
 async function exportReport() {
   if (!Sessions.current()) return toast('Abre un proyecto primero');
   const r = Report.build({
-    project: $('project-name').textContent, url: currentUrl,
+    project: $('project-name').textContent, url: viewUrl || currentUrl,
     devices: devices.filter((d) => d.enabled)
   });
   const out = await window.liveproject.saveReport(r);
@@ -1205,6 +1256,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   if (init.state) applyState(init.state);
 
   $('btn-open').onclick = () => window.liveproject.chooseFolder();
+  initAddressBar();
   $('btn-reload').onclick = reloadAll;
   $('btn-back').onclick = backAll;
   $('btn-restart').onclick = () => window.liveproject.restart();
@@ -1231,7 +1283,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   $('dt-dev').onclick = () => { setSide('messages'); switchInspector(inspectId); toast('Usa el selector «Dispositivo» de la barra para cambiar de vista'); };
   $('smart-open').onclick = async () => {
     if (!currentUrl) return toast('Abre un proyecto primero');
-    const r = await window.liveproject.editorOpenUrl(currentUrl);
+    const r = await window.liveproject.editorOpenUrl(viewUrl || currentUrl);
     if (!r || !r.ok) toast((r && r.message) || 'No se pudo abrir el editor');
     else toast(`Abierto en ${r.editor}`);
   };
@@ -1313,7 +1365,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   Emulate.init({ frames: () => [...frames.values()], toast });
   Lan.init({
     btn: $('btn-lan'), count: $('lan-count'), dialog: $('lan'), body: $('lan-body'), toggle: $('lan-toggle'), close: $('lan-x'),
-    pathOf: () => { try { const u = new URL(currentUrl); return u.pathname + u.search; } catch { return '/'; } }, toast
+    pathOf: () => { try { const u = new URL(viewUrl || currentUrl); return u.pathname + u.search; } catch { return '/'; } }, toast
   });
   document.querySelectorAll('.stab2').forEach((b) => { b.onclick = () => setSide(b.dataset.side); });
   $('btn-report').onclick = exportReport;

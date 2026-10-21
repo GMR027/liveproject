@@ -2,6 +2,7 @@ const { spawn } = require('child_process');
 const { EventEmitter } = require('events');
 const fs = require('fs');
 const http = require('http');
+const https = require('https');
 const path = require('path');
 
 const MIME = {
@@ -13,10 +14,23 @@ const MIME = {
 
 function ping(url) {
   return new Promise((resolve) => {
-    const req = http.request(url, { method: 'GET', timeout: 1000 }, (res) => {
-      res.resume();
-      resolve(true); // cualquier respuesta HTTP (incluso 500) significa que el servidor está vivo
-    });
+    let u;
+    try { u = new URL(url); } catch { resolve(false); return; }
+    if (!/^https?:$/.test(u.protocol)) { resolve(false); return; }
+    const lib = u.protocol === 'https:' ? https : http;
+    const local = /^(localhost|127\.|\[?::1\]?$)/.test(u.hostname);
+    let req;
+    try {
+      req = lib.request(u, {
+        method: 'GET',
+        timeout: 5000,
+        rejectUnauthorized: !local,
+        headers: { 'user-agent': 'LiveProject' }
+      }, (res) => {
+        res.resume();
+        resolve(true); // cualquier respuesta HTTP (incluso 500) significa que el servidor está vivo
+      });
+    } catch { resolve(false); return; }
     req.on('error', () => resolve(false));
     req.on('timeout', () => { req.destroy(); resolve(false); });
     req.end();
@@ -66,7 +80,7 @@ class ServerManager extends EventEmitter {
   async start(cfg) {
     await this.stop();
     if (cfg.external) {
-      this.log(`Modo URL externa: ${cfg.url}\n`);
+      this.log(`Modo URL externa: ${cfg.url}${cfg.path || ''}\n`);
     } else if (cfg.static) {
       await this.startStatic(cfg);
       this.log(`Servidor estático en ${cfg.url}\n`);
@@ -89,9 +103,14 @@ class ServerManager extends EventEmitter {
         if (unexpected) this.emit('exit', code);
       });
     }
-    const ok = await waitForServer(cfg.url + (cfg.path || ''), 30000);
-    if (!ok) this.log('El servidor no respondió en 30 s.\n', 'err');
-    return ok;
+    const ok = await waitForServer(cfg.url + (cfg.path || ''), cfg.external ? 8000 : 30000);
+    if (!ok) {
+      this.log('El servidor no respondió a tiempo.\n', 'err');
+      // Una web externa puede funcionar en Chromium aunque esta comprobación falle
+      // (proxy, cookies, protección anti-bots…): no bloqueamos las vistas.
+      if (!cfg.external) return false;
+    }
+    return true;
   }
 
   async stop() {

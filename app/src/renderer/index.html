@@ -15,7 +15,7 @@
       <div class="menu-pop" id="recent-list"></div>
     </div>
     <div class="proj"><span id="project-name">Sin proyecto</span><span id="status" class="status">—</span></div>
-    <input id="url" readonly>
+    <input id="url" spellcheck="false" autocomplete="off" title="Dirección de la página. Escribe o pega una URL completa (con su ruta y parámetros) y pulsa Enter para abrirla en todas las vistas" placeholder="Escribe o pega una dirección web y pulsa Enter">
     <div class="btn-group">
       <button id="btn-back" title="Volver a la página anterior en todas las vistas" disabled>← Atrás</button>
       <button id="btn-reload" title="Recargar vistas">⟳ Recargar</button>
@@ -256,7 +256,7 @@
           <span class="muted" id="proj-state">—</span>
         </div>
         <textarea id="proj-json" class="proj-json" spellcheck="false" rows="10" placeholder='{ "command": "php -S 127.0.0.1:{port} -t {root}" }'></textarea>
-        <p class="muted">Placeholders: <code>{port}</code> y <code>{root}</code>. Con <code>"url"</code> se usa un servidor que ya está en marcha (XAMPP, Docker…) y no se lanza ningún proceso.</p>
+        <p class="muted">Placeholders: <code>{port}</code> y <code>{root}</code>. Con <code>"url"</code> se usa un servidor que ya está en marcha (XAMPP, Docker…) o una web publicada (admite la página completa, con ruta y parámetros) y no se lanza ningún proceso. También puedes pegar cualquier dirección en la barra superior y pulsar Enter.</p>
       </section>
 
       <section id="set-devices">
@@ -343,13 +343,13 @@
               <li>Pulsa <b>📂 Abrir</b> y elige la carpeta de tu proyecto (o ejecuta <code>liveproject .</code> en la terminal).</li>
               <li>LiveProject detecta el servidor (<code>php -S</code>, <code>artisan serve</code>, <code>manage.py runserver</code>, Flask, <code>npm run dev</code>, Rack, Go…) y lo arranca. El indicador junto al nombre pasa de <span class="pill warn">iniciando…</span> a <span class="pill good">activo</span>.</li>
               <li>Tu página aparece dentro de los dispositivos. Edita y guarda un archivo: todas las vistas se recargan solas.</li>
-              <li>Si el proyecto ya tiene servidor (XAMPP, Docker…), indica su dirección con <code>"url"</code> en <code>.liveproject.json</code> y no se lanzará ningún proceso.</li>
+              <li>Si el proyecto ya tiene servidor (XAMPP, Docker…) o quieres revisar una web publicada, escribe o pega su dirección completa en la barra superior y pulsa <b>Enter</b>: se abre en todas las vistas, con su ruta y parámetros (<code>https://mi-sitio.com/programa?proyecto=10</code>). También puedes fijarla con <code>"url"</code> en <code>.liveproject.json</code>.</li>
             </ol>
           </details>
 
           <details><summary>🧭 Recorrido por la interfaz</summary>
             <ul>
-              <li><b>Barra superior</b>: abrir proyecto, estado del servidor, dirección, <b>⟳ Recargar</b> y <b>⏻ Reiniciar</b> el servidor, y los menús <b>👁 Vista</b> y <b>🧰 Herramientas</b>.</li>
+              <li><b>Barra superior</b>: abrir proyecto, estado del servidor, <b>dirección editable</b> (escribe o pega una URL completa y pulsa Enter para abrirla en todas las vistas), <b>⟳ Recargar</b> y <b>⏻ Reiniciar</b> el servidor, y los menús <b>👁 Vista</b> y <b>🧰 Herramientas</b>.</li>
               <li><b>Barra de dispositivos</b>: botones para activar o desactivar cada pantalla. Se pliega con el título <i>Dispositivos</i>.</li>
               <li><b>Escenario</b>: el centro, donde viven los dispositivos. Si no caben, desplázate horizontalmente.</li>
               <li><b>Barra de rendimiento</b> (bajo el escenario): puntuación y métricas de carga por dispositivo. Plegable.</li>
@@ -413,15 +413,15 @@
             <pre>{
   "command": "python3 -m http.server {port}",
   "port": 8000,
-  "url": "http://localhost:8080",
+  "url": "https://mi-sitio.com/programa?proyecto=10",
   "path": "/",
   "ignore": ["logs"],
   "delay": 0
 }</pre>
             <ul>
               <li><code>command</code>: comando que arranca el servidor. Admite <code>{port}</code> y <code>{root}</code>.</li>
-              <li><code>url</code>: usa un servidor que ya está en marcha, sin lanzar nada.</li>
-              <li><code>path</code>: ruta que se abre al inicio. <code>ignore</code>: carpetas que no provocan recarga. <code>delay</code>: espera (ms) antes de recargar.</li>
+              <li><code>url</code>: usa un servidor o una web que ya está en marcha, sin lanzar nada. Admite el host (<code>https://mi-sitio.com</code>) o una página completa con su ruta y parámetros (<code>https://mi-sitio.com/programa?proyecto=10</code>). Si no indicas <code>path</code>, se usa la ruta de esta URL.</li>
+              <li><code>path</code>: ruta que se abre al inicio; sirve para cambiar de página sin tocar <code>url</code> (por ejemplo, <code>"/programa?proyecto=10"</code>). <code>ignore</code>: carpetas que no provocan recarga. <code>delay</code>: espera (ms) antes de recargar.</li>
             </ul>
             <p class="muted">Capturas, sesiones e informes se guardan en <code>&lt;proyecto&gt;/.liveproject/</code>; añádelo a tu <code>.gitignore</code>. La pestaña <b>Servidor</b> del panel inferior muestra la salida del proceso.</p>
             <ul>

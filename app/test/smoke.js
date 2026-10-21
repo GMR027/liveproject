@@ -46,6 +46,11 @@ app.whenReady().then(async () => {
   check('la interfaz termina de inicializarse', await waitFor(`!!$('btn-dock').onclick`));
   check('las pestañas de herramientas existen', (await js(`document.querySelectorAll('#bottom-bar .tab').length`)) === 6);
 
+  // 1b. La barra de direcciones admite páginas completas (con ruta y parámetros)
+  check('la dirección acepta una página completa', await js(`addressUrl('https://projectweb.iguzman.com.mx/programa?proyecto=10') === 'https://projectweb.iguzman.com.mx/programa?proyecto=10'`));
+  check('la dirección completa un dominio sin esquema', await js(`addressUrl('mi-sitio.com/programa?x=1') === 'https://mi-sitio.com/programa?x=1'`));
+  check('la barra de direcciones es editable', await js(`(()=>{const i=$('url');i.value='https://ejemplo.com/pagina';return !i.readOnly && i.value.endsWith('/pagina');})()`));
+
   // 2. Traslado de las herramientas al panel lateral
   await js(`$('btn-dock').click()`);
   await new Promise((r) => setTimeout(r, 400));

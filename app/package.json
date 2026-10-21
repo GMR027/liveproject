@@ -1,7 +1,7 @@
 {
   "name": "liveproject",
   "productName": "LiveProject",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Vista previa en vivo multi-dispositivo para proyectos con cualquier backend (PHP, Python, Node, ...)",
   "main": "src/main/main.js",
   "desktopName": "liveproject.desktop",

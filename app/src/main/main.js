@@ -298,7 +298,7 @@ ipcMain.handle('project:config', () => {
   const file = path.join(cfg.root, '.liveproject.json');
   let text = '';
   try { text = fs.readFileSync(file, 'utf8'); } catch { /* no existe */ }
-  return { ok: true, root: cfg.root, text, command: cfg.command, url: cfg.url, external: cfg.external, static: cfg.static };
+  return { ok: true, root: cfg.root, text, command: cfg.command, url: cfg.url, path: cfg.path, external: cfg.external, static: cfg.static };
 });
 ipcMain.handle('project:config-write', (_e, { text }) => {
   if (!cfg) return { ok: false, message: 'No hay ningún proyecto abierto' };

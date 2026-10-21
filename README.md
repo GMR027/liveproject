@@ -10,10 +10,13 @@ La app vigila los archivos y recarga las vistas al guardar; sincroniza scroll/cl
 El servidor se detecta solo (`php -S`, artisan, manage.py, flask, `npm run dev`…). Para personalizarlo, crea `.liveproject.json`
 en el proyecto:
 
-    { "command": "python3 -m http.server {port}", "port": 8000, "url": "http://localhost:8080",
-      "path": "/", "ignore": ["logs"], "delay": 0 }
+    { "command": "python3 -m http.server {port}", "port": 8000, "url": "https://mi-sitio.com",
+      "path": "/programa?proyecto=10", "ignore": ["logs"], "delay": 0 }
 
-`url` = usar un servidor ya existente (XAMPP, Docker…) sin lanzar proceso. Placeholders: `{port}`, `{root}`.
+`url` = usar un servidor ya existente (XAMPP, Docker…) o una web publicada, sin lanzar proceso. Acepta el host o una página completa con su ruta y parámetros (`"url": "https://mi-sitio.com/programa?proyecto=10"`); si no se indica `path`, se usa la ruta de la URL. Placeholders: `{port}`, `{root}`.
+
+También puedes escribir o pegar cualquier dirección en la barra superior y pulsar **Enter** para abrirla en todas las vistas, sin editar el proyecto.
+
 Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gitignore`).
 
 ## Paneles

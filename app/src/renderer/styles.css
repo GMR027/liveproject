@@ -436,7 +436,8 @@ input:focus-visible, select:focus-visible, button:focus-visible { outline:2px so
 .brand b span { background:var(--grad); -webkit-background-clip:text; background-clip:text; color:transparent; }
 .proj { display:flex; align-items:center; gap:8px; min-width:0; }
 #project-name { overflow:hidden; text-overflow:ellipsis; max-width:220px; }
-#url { background:var(--code); border-radius:999px; padding:6px 14px; font:12px ui-monospace, monospace; }
+#url { background:var(--code); border-radius:999px; padding:6px 14px; font:12px ui-monospace, monospace; cursor:text; }
+#url:focus { color:var(--fg); border-color:var(--accent); }
 .btn-group { display:flex; } .btn-group button { border-radius:0; margin-left:-1px; } .btn-group button:first-child { border-radius:8px 0 0 8px; margin-left:0; } .btn-group button:last-child { border-radius:0 8px 8px 0; }
 .btn-group button:hover, .btn-group button.active { position:relative; z-index:1; }
 .status { font-size:11px; font-weight:600; border:1px solid transparent; }

@@ -16,6 +16,30 @@ const DEFAULT_IGNORE = [
   '.liveproject', '.idea', '.vscode', 'dist', 'build', '.cache'
 ];
 
+// Acepta tanto un host («https://mi-sitio.com») como una página completa
+// («https://mi-sitio.com/programa?proyecto=10») y separa origen y ruta.
+function splitTarget(rawUrl, rawPath) {
+  let raw = String(rawUrl || '').trim();
+  let path = String(rawPath || '').trim();
+  if (!raw) return { url: raw, path: path || '/' };
+
+  if (raw.startsWith('//')) raw = `https:${raw}`;
+  if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) {
+    raw = `${/^(localhost|127\.|0\.0\.0\.0|\[::1\])(:\d+)?(\/|$)/i.test(raw) ? 'http' : 'https'}://${raw}`;
+  }
+
+  try {
+    const u = new URL(raw);
+    if (!path) path = `${u.pathname}${u.search}${u.hash}` || '/';
+    if (!path.startsWith('/')) path = `/${path}`;
+    return { url: u.origin, path };
+  } catch {
+    if (!path) path = '/';
+    if (!path.startsWith('/')) path = `/${path}`;
+    return { url: raw.replace(/\/+$/, ''), path };
+  }
+}
+
 function freePort() {
   return new Promise((resolve, reject) => {
     const srv = net.createServer();
@@ -37,18 +61,20 @@ async function loadConfig(root) {
   }
 
   const preset = detect(root);
-  const port = user.port || (user.url ? null : await freePort());
+  const target = splitTarget(user.url, user.path);
+  const external = !!target.url;
+  const port = user.port || (external ? null : await freePort());
   const sub = (s) => (s ? s.replace(/\{port\}/g, port).replace(/\{root\}/g, root) : s);
 
   const cfg = {
     root,
-    name: user.url ? 'URL externa' : user.command ? 'Comando personalizado' : preset.name,
-    external: !!user.url,
-    static: !user.url && !user.command && !!preset.static,
-    command: user.url ? null : sub(user.command || preset.command),
-    url: user.url || `http://127.0.0.1:${port}`,
+    name: external ? 'URL externa' : user.command ? 'Comando personalizado' : preset.name,
+    external,
+    static: !external && !user.command && !!preset.static,
+    command: external ? null : sub(user.command || preset.command),
+    url: external ? target.url : `http://127.0.0.1:${port}`,
     port,
-    path: user.path || '/',
+    path: external ? target.path : (user.path || '/'),
     ignore: [...DEFAULT_IGNORE, ...(user.ignore || [])],
     watch: user.watch || ['.'],
     delay: Number.isFinite(user.delay) ? user.delay : 0,
@@ -57,4 +83,4 @@ async function loadConfig(root) {
   return cfg;
 }
 
-module.exports = { loadConfig, DEFAULT_DEVICES };
+module.exports = { loadConfig, splitTarget, DEFAULT_DEVICES };

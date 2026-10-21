@@ -23,7 +23,7 @@ const [v, sha, size] = process.argv.slice(1);
 const base = 'https://liveproject.iguzman.com.mx/downloads';
 require('fs').writeFileSync('downloads/latest.json', JSON.stringify({
   version: v, url: base + '/liveproject_' + v + '_amd64.deb', sha256: sha, size: Number(size),
-  date: new Date().toISOString().slice(0, 10), notes: ''
+  date: new Date().toISOString().slice(0, 10), notes: process.env.NOTES || ''
 }, null, 2) + '\n');
 " "$VERSION" "$SHA" "$SIZE"
 
