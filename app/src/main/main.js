@@ -22,10 +22,113 @@ let watcher = null;
 const server = new ServerManager();
 server.on('log', (l) => send('log', l));
 server.on('exit', () => send('project:state', state({ status: 'error' })));
+// ---------- espejo de sesión con la red local ----------
+// Las vistas de la plataforma y los dispositivos conectados al túnel comparten la sesión:
+// las cookies de la plataforma se inyectan en las peticiones del túnel y las cookies que
+// fija el servidor para un dispositivo de la red se copian a la sesión de la plataforma.
+const APP_PARTITION = 'persist:liveproject';
+const appSession = () => session.fromPartition(APP_PARTITION);
+
+// Cookies de la plataforma para un origen (las que se envían a ese sitio).
+async function appCookies(origin) {
+  const ses = appSession();
+  const out = new Map();
+  try {
+    const byUrl = await ses.cookies.get({ url: origin + '/' });
+    for (const c of byUrl || []) out.set(`${c.name}|${c.path}`, c);
+  } catch { /* sin cookies */ }
+  try {
+    const host = new URL(origin).hostname;
+    const byDomain = await ses.cookies.get({ domain: host });
+    for (const c of byDomain || []) out.set(`${c.name}|${c.path}`, c);
+  } catch { /* sin cookies */ }
+  return [...out.values()].map((c) => ({ name: c.name, value: c.value, path: c.path, secure: !!c.secure }));
+}
+
+// Convierte una cabecera «Set-Cookie» en los datos que necesita la sesión de Electron.
+function parseSetCookie(str) {
+  const parts = String(str || '').split(';');
+  const first = parts.shift() || '';
+  const eq = first.indexOf('=');
+  if (eq < 0) return null;
+  const out = {
+    name: first.slice(0, eq).trim(),
+    value: first.slice(eq + 1).trim(),
+    path: '/', secure: false, httpOnly: false, expirationDate: null
+  };
+  if (!out.name) return null;
+  for (const p of parts) {
+    const i = p.indexOf('=');
+    const k = (i < 0 ? p : p.slice(0, i)).trim().toLowerCase();
+    const v = i < 0 ? '' : p.slice(i + 1).trim();
+    if (k === 'path' && v.startsWith('/')) out.path = v;
+    else if (k === 'secure') out.secure = true;
+    else if (k === 'httponly') out.httpOnly = true;
+    else if (k === 'max-age') { const n = parseInt(v, 10); if (Number.isFinite(n)) out.expirationDate = Date.now() / 1000 + n; }
+    else if (k === 'expires' && out.expirationDate === null) { const t = Date.parse(v); if (!Number.isNaN(t)) out.expirationDate = t / 1000; }
+  }
+  return out;
+}
+
+// Copia una cookie del túnel a la sesión de la plataforma.
+// Devuelve 'deleted' si la cookie se borró (cierre de sesión), 'changed' si cambió el valor o '' si no hubo cambios.
+async function importCookie(setCookie, origin) {
+  const c = parseSetCookie(setCookie);
+  if (!c) return '';
+  const ses = appSession();
+  const secure = c.secure && /^https:/i.test(origin);
+  const url = origin + (c.path.startsWith('/') ? c.path : '/');
+  let before = null;
+  try {
+    const list = await ses.cookies.get({ url });
+    before = (list || []).find((x) => x.name === c.name && x.path === c.path) || null;
+  } catch { /* sin cookies */ }
+  const deleted = c.expirationDate !== null && c.expirationDate <= Date.now() / 1000;
+  const same = before && String(before.value) === c.value && !!before.secure === secure;
+  try {
+    const opts = { url, name: c.name, value: c.value, secure, httpOnly: c.httpOnly };
+    if (c.expirationDate !== null) opts.expirationDate = c.expirationDate;
+    await ses.cookies.set(opts);
+  } catch { /* cookie no válida */ }
+  if (same) return '';
+  return deleted ? 'deleted' : 'changed';
+}
+
+// La ruta que está viendo la plataforma: los dispositivos del túnel la siguen.
+let appPath = '';
+let lastSession = '';
+ipcMain.on('app:path', (_e, p) => { appPath = String(p || ''); });
+
 const lan = createLan({
   getTarget: () => (cfg ? cfg.url : ''),
+  getPath: () => appPath,
+  getCookies: (origin) => appCookies(origin),
+  onSetCookie: (setCookie, origin) => importCookie(setCookie, origin).then((what) => {
+    // Si el dispositivo de la red cerró sesión, las vistas tienen que recargarse para verse igual.
+    if (what === 'deleted') { lastSession = ''; send('lan:session', { origin }); }
+  }),
+  onMirror: (msg) => send('lan:mirror', msg),
+  onNav: (info) => send('lan:nav', info),
   onError: (e) => send('lan:error', e),
   onClients: (list) => send('lan:clients', list)
+});
+
+// Compara la sesión de la plataforma con la de siempre: si ha cambiado (por ejemplo, un inicio
+// de sesión en las vistas), los dispositivos del túnel se recargan para ver lo mismo.
+// La ruta llega aquí para no mandarles a una página antigua.
+ipcMain.handle('lan:sync-session', async (_e, path) => {
+  if (path) appPath = String(path);
+  const origin = cfg ? cfg.url : '';
+  if (!origin) return { changed: false };
+  let key = '';
+  try {
+    const cookies = await appCookies(origin);
+    key = cookies.map((c) => `${c.name}=${c.value}`).sort().join('; ');
+  } catch { /* sin cookies */ }
+  const changed = !!lastSession && lastSession !== key;
+  lastSession = key;
+  if (changed) lan.reload();
+  return { changed };
 });
 
 const send = (channel, payload) => {
@@ -65,6 +168,7 @@ async function stopProject() {
 
 async function openProject(folder) {
   await stopProject();
+  appPath = '';
   send('project:state', { root: folder, status: 'starting' });
   cfg = await loadConfig(folder);
   send('project:state', state({ status: 'starting' }));
@@ -281,11 +385,16 @@ ipcMain.handle('report:save', (_e, { html, md }) => {
   shell.showItemInFolder(`${base}.html`);
   return { dir, html: `${base}.html`, md: `${base}.md` };
 });
+const lanStatus = () => ({ ...lan.status(), target: cfg ? cfg.url : '' });
 ipcMain.handle('lan:start', async () => {
-  try { return { ok: true, ...(await lan.start()) }; } catch (e) { return { ok: false, error: e.message, ...lan.status() }; }
+  try { return { ok: true, ...lanStatus(), ...(await lan.start()) }; } catch (e) { return { ok: false, error: e.message, ...lanStatus() }; }
 });
-ipcMain.handle('lan:stop', () => { lan.stop(); return lan.status(); });
-ipcMain.handle('lan:status', () => lan.status());
+ipcMain.handle('lan:stop', () => { lan.stop(); return lanStatus(); });
+ipcMain.handle('lan:status', () => lanStatus());
+// Mensaje del espejo (navegación, clic, texto…) que la plataforma envía a los dispositivos de la red.
+ipcMain.on('lan:mirror', (_e, msg) => { lan.mirror(msg || {}); });
+// Recarga los dispositivos de la red (para que sigan viendo lo mismo que las vistas).
+ipcMain.on('lan:reload', () => { lan.reload(); });
 ipcMain.handle('project:choose', chooseFolder);
 ipcMain.handle('project:open', (_e, folder) => {
   const dir = String(folder || '');

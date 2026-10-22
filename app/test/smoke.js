@@ -53,12 +53,12 @@ app.whenReady().then(async () => {
 
   // 2. Traslado de las herramientas al panel lateral
   await js(`$('btn-dock').click()`);
-  await new Promise((r) => setTimeout(r, 400));
+  await waitFor(`toolsDock === 'side'`).catch(() => {}); await new Promise((r) => setTimeout(r, 300));
   check('las herramientas van al panel lateral', await js(`toolsDock === 'side' && !$('bottom').hidden === false && !$('side-tools').hidden`));
   check('la barra se traslada', await js(`$('bottom-bar').parentNode.id === 'tools-bar'`));
   check('los paneles se trasladan', await js(`$('tab-smart').parentNode.id === 'tools-host'`));
   await js(`$('btn-dock').click()`);
-  await new Promise((r) => setTimeout(r, 400));
+  await waitFor(`toolsDock === 'bottom'`).catch(() => {}); await new Promise((r) => setTimeout(r, 300));
   check('las herramientas vuelven abajo', await js(`toolsDock === 'bottom' && !$('bottom').hidden`));
 
   // 3. La pestaña «Herramientas» del lateral
@@ -87,7 +87,17 @@ app.whenReady().then(async () => {
   // 7. El informe y el HAR se pueden generar
   check('el HAR se construye', await js(`(()=>{const h=Net.har();return h.log && Array.isArray(h.log.entries);})()`));
 
-  // 8. Sin errores en consola
+  // 8. Espejo con la red local: las cookies de la plataforma se anteponen a las del dispositivo
+  const { mergeCookies } = require('../src/main/lan');
+  check('la cookie de la plataforma tiene prioridad',
+    mergeCookies('PHPSESSID=antigua; otra=1', [{ name: 'PHPSESSID', value: 'nueva' }]) === 'otra=1; PHPSESSID=nueva',
+    mergeCookies('PHPSESSID=antigua; otra=1', [{ name: 'PHPSESSID', value: 'nueva' }]));
+  check('sin cookies de la plataforma se respeta las del dispositivo',
+    mergeCookies('PHPSESSID=x', []) === 'PHPSESSID=x');
+  check('se añaden las cookies que faltaban',
+    mergeCookies('', [{ name: 'a', value: '1' }, { name: 'b', value: '2' }]) === 'a=1; b=2');
+
+  // 9. Sin errores en consola
   check('sin errores en consola', errores.length === 0, errores.slice(0, 3).join(' | '));
 
   console.log(fallos ? `\n${fallos} comprobación(es) fallida(s)\n` : '\nTodo correcto\n');

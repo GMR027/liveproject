@@ -1,7 +1,7 @@
 {
   "name": "liveproject",
   "productName": "LiveProject",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Vista previa en vivo multi-dispositivo para proyectos con cualquier backend (PHP, Python, Node, ...)",
   "main": "src/main/main.js",
   "desktopName": "liveproject.desktop",
@@ -12,7 +12,8 @@
     "start": "electron .",
     "build": "electron-builder --linux AppImage deb",
     "build:deb": "electron-builder --linux deb",
-    "test": "electron test/smoke.js"
+    "test": "electron test/smoke.js",
+    "test:mirror": "electron test/mirror.js"
   },
   "dependencies": {
     "chokidar": "^3.6.0",

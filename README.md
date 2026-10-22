@@ -20,6 +20,10 @@ También puedes escribir o pegar cualquier dirección en la barra superior y pul
 Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gitignore`).
 
 ## Paneles
+- **Espejo entre vistas** (por defecto): el scroll, los clics y lo que se escribe en un formulario se replican al instante en
+  todas las vistas; si una navega (enlace, envío de formulario o redirección), las demás siguen su misma ruta; y la sesión
+  (cookies y `sessionStorage`) es común, así que un formulario de acceso se ve igual en todas: si inicias sesión en una,
+  han iniciado sesión todas. Se desactiva con *Vista → Sincronizar scroll, clics, formularios y navegación*.
 - **Inspector inteligente** (abajo): árbol del DOM con barras de tamaño (rojo = desborda el viewport), modelo de caja, estilos,
   resumen, problemas de accesibilidad/responsive/contraste, paleta y encabezados. Pasa el ratón por un elemento para resaltarlo en la página.
 - **DevTools**: las DevTools reales de Chromium (Elements, Console, Sources, Network…) del dispositivo elegido, ampliables a pantalla completa.
@@ -49,6 +53,8 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
 - **📡 Red local**: proxy en el puerto 4777 (o libre) para abrir el proyecto en un móvil real, tableta u otro equipo de la misma red (URL + QR).
   Recarga solos al guardar, funciona con HMR/WebSocket y sus errores de JavaScript llegan al panel *Mensajes*. Mientras está activo, cualquier equipo
   de la red puede ver el proyecto; si no conecta, abre el puerto en el cortafuegos.
+  Con la red local activa, el móvil es **otro espejo** de la plataforma: comparte la sesión (las cookies de las vistas se inyectan en sus
+  peticiones y las suyas se copian a las vistas), sigue la misma ruta y replica al instante lo que se escribe o se pulsa en cualquiera de los dos lados.
 - **Interfaz**: menús *Vista* y *Herramientas*, barras de dispositivos y rendimiento plegables, botón **⟲ Girar** en cada teléfono/tableta (o *Vista → Girar móviles y tabletas*) para ver el modo horizontal,
   paleta de comandos **Ctrl/⌘+K** con atajos (Ctrl+R recargar, Ctrl+B panel inferior, Ctrl+Shift+D mover herramientas, F12 DevTools, Ctrl+1…6 paneles),
   historial de proyectos recientes (**🕘**) y plantillas de arranque del servidor en *Ajustes → Proyecto*.
@@ -57,7 +63,8 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
 
 ## Pruebas
 
-    cd app && npm test        # prueba de humo (carga la interfaz y comprueba lo esencial)
+    cd app && npm test           # prueba de humo (carga la interfaz y comprueba lo esencial)
+    cd app && npm run test:mirror  # prueba del espejo (sesión, formularios y navegación en las 3 vistas y en el túnel)
 
 ## Licencia
 

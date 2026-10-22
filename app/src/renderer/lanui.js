@@ -26,6 +26,7 @@ const Lan = (() => {
     ui.body.textContent = '';
     if (!st.running) {
       el('p', 'muted', ui.body, 'Reenvía tu proyecto a la red Wi-Fi/Ethernet para abrirlo en un móvil real, una tableta u otro equipo. Los dispositivos se recargan solos al guardar y sus errores de JavaScript aparecen en el panel Mensajes.');
+      el('p', 'muted', ui.body, 'Espejo: las vistas de la plataforma y los equipos de la red ven la misma página, la misma sesión y los mismos formularios, en tiempo real.');
       el('p', 'lan-warn', ui.body, '⚠ Mientras esté activo, cualquier equipo de tu red podrá ver este proyecto. Úsalo solo en redes de confianza.');
       if (!st.addresses.length) el('p', 'muted', ui.body, 'No se detectó ninguna interfaz de red local.');
       return;
@@ -49,7 +50,11 @@ const Lan = (() => {
     try { drawQr(canvas, urlFor(addrs[chosen])); } catch { canvas.remove(); }
     el('h4', '', ui.body, `Dispositivos conectados (${st.clients.length})`);
     if (!st.clients.length) el('div', 'muted', ui.body, 'Ninguno todavía.');
-    for (const c of st.clients) el('div', 'lan-client', ui.body, `📱 ${c.name} · ${c.ip}`);
+    for (const c of st.clients) {
+      const row = el('div', 'lan-client', ui.body);
+      el('span', '', row, `📱 ${c.name} · ${c.ip}`);
+      if (c.path) el('code', 'muted', row, c.path);   // la ruta que está viendo ahora mismo
+    }
     el('p', 'muted', ui.body, `Si no conecta, revisa el cortafuegos del equipo (puerto ${st.port}) y que ambos estén en la misma red. Los servidores con HMR/WebSocket también funcionan a través del túnel.`);
   }
 
@@ -80,7 +85,14 @@ const Lan = (() => {
     o.dialog.addEventListener('close', () => window.liveproject.devtoolsVisible(true));
     window.liveproject.onLanClients((clients) => set({ clients }));
     render();
+    // El origen del proyecto (el que sirve el túnel) se necesita para el espejo.
+    window.liveproject.lanStatus().then(set).catch(() => {});
   }
 
-  return { init, drawQr };
+  // Origen (esquema + host) que sirve el túnel.
+  const target = () => {
+    try { return new URL(st.target).origin; } catch { return ''; }
+  };
+
+  return { init, drawQr, target };
 })();

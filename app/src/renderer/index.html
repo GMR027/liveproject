@@ -24,7 +24,7 @@
     <div class="menu">
       <button class="menu-btn" title="Opciones de visualización">👁 Vista ▾</button>
       <div class="menu-pop">
-        <label class="menu-item"><input type="checkbox" id="chk-sync" checked> <span>Sincronizar scroll, clics y formularios</span></label>
+        <label class="menu-item"><input type="checkbox" id="chk-sync" checked> <span>Sincronizar scroll, clics, formularios y navegación</span></label>
         <label class="menu-item"><input type="checkbox" id="chk-fit" checked> <span>Ajustar a la pantalla</span></label>
         <button type="button" class="menu-item" id="btn-rotate-all" title="Gira todos los teléfonos y tabletas a horizontal o vertical">⟲ <span>Girar móviles y tabletas</span></button>
         <label class="menu-item" title="Muestra una sola vista ocupando toda el área de vistas, sin marco de dispositivo"><input type="checkbox" id="chk-full"> <span>Modo completo</span></label>
@@ -506,7 +506,19 @@
               <li>Escanea el <b>código QR</b> con el móvil o escribe la URL en otro equipo de la <b>misma red</b>.</li>
               <li>Los dispositivos se recargan al guardar, funcionan con HMR/WebSocket y sus errores de JavaScript llegan al panel <i>Mensajes</i>.</li>
             </ol>
+            <p>Con la red local activa, el móvil y las vistas de la plataforma son <b>un espejo</b>: comparten la <b>sesión</b> (si inicias sesión en una, lo ves en las demás), muestran la <b>misma página</b> y replican al instante lo que se escribe, se marca o se pulsa en cualquiera de los dos lados.</p>
             <p class="muted">Mientras está activo, cualquier equipo de la red puede ver tu proyecto. Si no conecta, abre el puerto en el cortafuegos. Desactívalo cuando termines.</p>
+          </details>
+
+          <details><summary>🪞 Espejo entre vistas</summary>
+            <p>Todas las vistas de la plataforma están conectadas entre sí (y con los equipos de la red local):</p>
+            <ul>
+              <li>El <b>scroll</b>, los <b>clics</b> y lo que se <b>escribe</b> en un formulario se replica al instante en las demás vistas.</li>
+              <li>Si una vista <b>navega</b> (un enlace, un envío de formulario, una redirección), las demás siguen su misma ruta.</li>
+              <li>La <b>sesión</b> (cookies) y el <b>sessionStorage</b> se comparten: con un formulario de acceso, todas las vistas entran y salen juntas.</li>
+              <li>Se puede desactivar con <b>👁 Vista → Sincronizar scroll, clics, formularios y navegación</b>.</li>
+            </ul>
+            <p class="muted">Abrir una ruta «solo en la vista elegida» (Shift+clic en el panel <i>Rutas</i>) no se replica: es una acción deliberada.</p>
           </details>
 
           <details><summary>🤖 Inteligencia artificial</summary>
@@ -586,6 +598,7 @@
   <script src="lanui.js"></script>
   <script src="smart.js"></script>
   <script src="perf.js"></script>
+  <script src="mirror.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

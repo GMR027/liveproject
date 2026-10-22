@@ -204,12 +204,20 @@ function addFrame(device) {
   f.view.setAttribute('preload', webviewPreload);
   f.view.setAttribute('partition', 'persist:liveproject');
   if (isMobile(device)) f.view.setAttribute('useragent', UA_MOBILE);
-  if ((viewUrl || currentUrl) && (ready || browsing)) f.view.setAttribute('src', viewUrl || currentUrl);
+  if ((viewUrl || currentUrl) && (ready || browsing)) {
+    Mirror.expect(device.id, viewUrl || currentUrl);
+    f.view.setAttribute('src', viewUrl || currentUrl);
+  }
   f.view.addEventListener('dom-ready', () => {
     f.ready = true;
     try { f.wcId = f.view.getWebContentsId(); } catch { /* sin adjuntar */ }
     if (netPending.length) feedNet([]);
     if (device.id === inspectId && !inspected) attachInspector();
+    // La vista que acaba de cargar pide el sessionStorage de las demás (cada una tiene el suyo).
+    for (const other of frames.values()) {
+      if (other === f || !other.ready) continue;
+      try { other.view.send('sync', { type: 'storage-get' }); } catch { /* sin adjuntar */ }
+    }
     Emulate.onReady(f);
   });
   for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-fail-load', 'did-finish-load']) f.view.addEventListener(ev, updateBack);
@@ -218,6 +226,18 @@ function addFrame(device) {
     if (e.url) viewUrl = e.url;
     // no pisar lo que el usuario está escribiendo en la barra de direcciones
     if (e.url && document.activeElement !== $('url')) $('url').value = e.url;
+    Mirror.onNavigate(f, e.url);    // las demás vistas (y el túnel) siguen la misma ruta
+    // La ruta actual: los dispositivos del túnel la siguen (espejo).
+    let path = '';
+    try { const u = new URL(e.url); path = u.pathname + u.search; } catch { /* URL inválida */ }
+    window.liveproject.setPath(path);
+    window.liveproject.lanSyncSession(path);   // si la sesión cambió, el túnel se recarga
+  });
+  f.view.addEventListener('did-navigate-in-page', (e) => {
+    if (!e.url) return;
+    viewUrl = e.url;
+    if (document.activeElement !== $('url')) $('url').value = e.url;
+    Mirror.onNavigate(f, e.url);    // también al cambiar el ancla (#)
   });
   f.view.addEventListener('console-message', (e) => Messages.fromConsole(device.name, e.level, e.message, e.sourceId, e.line));
   f.view.addEventListener('did-fail-load', (e) => {
@@ -235,8 +255,8 @@ function addFrame(device) {
     }
   });
   f.view.addEventListener('ipc-message', (e) => {
-    if (e.channel !== 'sync' || !$('chk-sync').checked) return;
-    for (const other of frames.values()) if (other.view !== f.view && other.ready) other.view.send('sync', e.args[0]);
+    if (e.channel !== 'sync') return;
+    Mirror.onSync(device.id, e.args[0]);   // clic, texto, scroll… se replican en las demás vistas y en el túnel
   });
   f.screen.appendChild(f.view);
   stage.appendChild(f.wrap);
@@ -620,6 +640,27 @@ function reloadAll() {
   for (const f of frames.values()) {
     try { f.view.reload(); } catch { /* aún sin cargar */ }
   }
+  // Los equipos de la red local también se recargan: siguen viendo lo mismo.
+  window.liveproject.lanReload();
+}
+
+// Recarga solo las vistas que están en el proyecto (las que miran otra web se dejan igual).
+// Si el usuario está escribiendo en una vista, no se recarga: no se le pierde lo escrito.
+function reloadProjectViews() {
+  let target = Mirror.target();
+  if (!target) { try { target = new URL(viewUrl || currentUrl).origin; } catch { target = ''; } }
+  let n = 0;
+  for (const f of frames.values()) {
+    try {
+      const u = f.view.getURL();
+      if (target && !u.startsWith(target)) continue;
+      f.view.executeJavaScript("(() => { const e = document.querySelector('input:not([type=hidden]), textarea, select'); return !!(e && (e.value || e.checked)); })()")
+        .then((busy) => { if (!busy) { try { f.view.reload(); } catch { /* sin adjuntar */ } } })
+        .catch(() => { try { f.view.reload(); } catch { /* sin adjuntar */ } });
+      n++;
+    } catch { /* aún sin cargar */ }
+  }
+  return n;
 }
 
 /* ---------------- navegación a rutas (panel «Rutas») ---------------- */
@@ -680,8 +721,15 @@ function navigateTo(route, onlyId) {
     try { same = f.view.getURL() === url; } catch { /* aún sin adjuntar */ }
     try {
       // Si ya está en esa página, Enter/el clic la recarga (si no, no cambiaría nada).
-      if (same) f.view.reload();
-      else f.view.setAttribute('src', url);
+      if (same) {
+        if (onlyId) Mirror.suppress(f.device.id);
+        f.view.reload();
+      } else {
+        // La carga la hacemos nosotros: no se replica como si fuera una navegación del usuario.
+        Mirror.expect(f.device.id, url);
+        if (onlyId) Mirror.suppress(f.device.id);
+        f.view.setAttribute('src', url);
+      }
       n++;
     } catch { /* sin adjuntar */ }
   }
@@ -729,7 +777,11 @@ function applyState(s) {
     rebuildFrames();
     if (ready) {
       for (const f of frames.values()) {
-        if (f.view.getAttribute('src') !== currentUrl) { f.view.setAttribute('src', currentUrl); continue; }
+        if (f.view.getAttribute('src') !== currentUrl) {
+          Mirror.expect(f.device.id, currentUrl);
+          f.view.setAttribute('src', currentUrl);
+          continue;
+        }
         try { f.view.reload(); } catch { /* aún sin cargar */ }
       }
     }
@@ -1250,6 +1302,23 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   window.liveproject.onNetBatch(feedNet);
   window.liveproject.onNetNav(({ wc }) => Net.navigated(wc));
   window.liveproject.onLanError((e) => Messages.fromRemote(e));
+  // Espejo con la red local: lo que hacen los dispositivos del túnel llega a las vistas y al revés.
+  let sessionDirty = 0;
+  window.liveproject.onLanMirror((msg) => Mirror.onTunnel(msg));
+  window.liveproject.onLanNav((info) => { clearTimeout(sessionDirty); Mirror.onTunnelNav(info && info.path); });
+  // La sesión del túnel cambió: las vistas del proyecto se recargan (si no, ya se recargaron con la ruta).
+  window.liveproject.onLanSession(() => {
+    clearTimeout(sessionDirty);
+    sessionDirty = setTimeout(() => reloadProjectViews(), 700);
+  });
+  Mirror.init({
+    frames: () => [...frames.values()],
+    enabled: () => $('chk-sync').checked,
+    sendTunnel: (msg) => { window.liveproject.lanMirror(msg); },
+    currentUrl: () => viewUrl || currentUrl,
+    targetOrigin: () => Lan.target() || '',
+    onUrl: (url) => { if (document.activeElement !== $('url')) $('url').value = url; }
+  });
   window.liveproject.onLinksProgress((p) => { $('links-status').textContent = `Comprobando ${p.done}/${p.total}…`; });
   renderChips();
   rebuildFrames();

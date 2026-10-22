@@ -59,6 +59,11 @@ contextBridge.exposeInMainWorld('liveproject', {
   lanStart: () => Promise.resolve({ ok: false }),
   lanStop: () => Promise.resolve({}),
   lanStatus: () => Promise.resolve({ running: false, addresses: [] }),
+  lanMirror: noop,
+  lanReload: noop,
+  lanSyncSession: () => Promise.resolve({ changed: false }),
+  setPath: noop,
   onNetBatch: on(), onNetNav: on(), onLinksProgress: on(), onLanError: on(), onLanClients: on(),
+  onLanMirror: on(), onLanNav: on(), onLanSession: on(),
   onState: on(), onLog: on(), onReload: on()
 });

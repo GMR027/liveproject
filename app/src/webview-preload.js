@@ -54,6 +54,44 @@ function onField(e) {
 window.addEventListener('input', onField, true);
 window.addEventListener('change', onField, true);
 
+// sessionStorage no se comparte entre vistas (cada <webview> es un contexto aparte): se replica a mano.
+function sessionSnapshot() {
+  const data = {};
+  try {
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      data[k] = sessionStorage.getItem(k);
+    }
+  } catch { /* sin permiso */ }
+  return data;
+}
+function sendSession() {
+  if (isApplying()) return;
+  ipcRenderer.sendToHost('sync', { type: 'storage', data: sessionSnapshot() });
+}
+try {
+  const put = Storage.prototype.setItem;
+  const del = Storage.prototype.removeItem;
+  const clr = Storage.prototype.clear;
+  Storage.prototype.setItem = function (k, v) {
+    const r = put.call(this, k, v);
+    if (this === window.sessionStorage) sendSession();
+    return r;
+  };
+  Storage.prototype.removeItem = function (k) {
+    const r = del.call(this, k);
+    if (this === window.sessionStorage) sendSession();
+    return r;
+  };
+  Storage.prototype.clear = function () {
+    const r = clr.call(this);
+    if (this === window.sessionStorage) sendSession();
+    return r;
+  };
+} catch { /* sin soporte */ }
+window.addEventListener('DOMContentLoaded', sendSession);
+window.addEventListener('pageshow', sendSession);
+
 // Envío con Enter (sin botón): con un botón, el clic ya se replica.
 window.addEventListener('submit', (e) => {
   if (isApplying() || !e.isTrusted || e.submitter || !(e.target instanceof HTMLFormElement)) return;
@@ -87,5 +125,18 @@ ipcRenderer.on('sync', (_e, msg) => {
       const el = document.querySelector(msg.selector);
       if (el) el.click();
     });
+  } else if (msg.type === 'storage') {
+    // sessionStorage replicado desde otra vista (cada <webview> tiene el suyo).
+    guard(() => {
+      const data = msg.data || {};
+      try {
+        for (const k of Object.keys(data)) {
+          if (sessionStorage.getItem(k) !== data[k]) sessionStorage.setItem(k, data[k]);
+        }
+      } catch { /* sin permiso */ }
+    });
+  } else if (msg.type === 'storage-get') {
+    // Otra vista acaba de cargar y pide el sessionStorage compartido.
+    sendSession();
   }
 });
