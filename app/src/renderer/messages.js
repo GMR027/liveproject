@@ -52,8 +52,8 @@ const Messages = (() => {
 
   const norm = (s) => s.replace(/^\[[^\]]*\]\s*/, '').replace(/^PHP /, '').replace(/\s+/g, ' ').replace(/\d{2}:\d{2}:\d{2}/g, '').trim();
 
-  function add({ lang, sev, origin, line }) {
-    const key = `${lang}|${norm(line)}`;
+  function add({ lang, sev, origin, line, keyExtra }) {
+    const key = `${lang}|${norm(line)}${keyExtra ? `|${keyExtra}` : ''}`;
     const now = Date.now();
     let it = items.find((x) => x.key === key);
     if (it) {
@@ -67,9 +67,59 @@ const Messages = (() => {
       items.unshift(it);
       if (items.length > 300) items.pop();
     }
+    hydrate(it);
     render();
     scheduleAuto(it);
     return it;
+  }
+
+  /* ---------- datos estructurados (arrays / objetos / JSON) ---------- */
+  // Busca el primer objeto o array JSON dentro de un texto (aunque lleve prefijo, como
+  // «local.ERROR: ... {"exception":...}») y lo convierte en datos expandibles.
+  function jsonEnd(s, start) {
+    const open = s[start], close = open === '{' ? '}' : ']';
+    let depth = 0, str = false, esc = false;
+    for (let i = start; i < s.length; i++) {
+      const c = s[i];
+      if (str) {
+        if (esc) esc = false;
+        else if (c === '\\') esc = true;
+        else if (c === '"') str = false;
+        continue;
+      }
+      if (c === '"') str = true;
+      else if (c === open) depth++;
+      else if (c === close) { depth--; if (depth === 0) return i; }
+    }
+    return -1;
+  }
+
+  function extractJson(text) {
+    if (!text || text.length > 200000) return undefined;
+    let tries = 0;
+    for (let i = 0; i < text.length && tries < 20; i++) {
+      const c = text[i];
+      if (c !== '{' && c !== '[') continue;
+      tries++;
+      const end = jsonEnd(text, i);
+      if (end < 0) continue;
+      const chunk = text.slice(i, end + 1);
+      if (chunk.length < 2) continue;
+      try {
+        const v = JSON.parse(chunk);
+        if (v && typeof v === 'object') return v;
+      } catch { /* no es JSON válido: se sigue buscando */ }
+    }
+    return undefined;
+  }
+
+  // Convierte en datos el JSON que venga en el título o en el detalle de un mensaje.
+  function hydrate(it) {
+    if (it.data !== undefined || it.dataParsed) return;
+    const v = extractJson([it.title, ...it.detail].join('\n'));
+    if (v !== undefined) {
+      it.data = v; it.dataParsed = true; it.dataExpanded = new Set();
+    }
   }
 
   /* ---------- explicación con IA (manual y proactiva) ---------- */
@@ -115,7 +165,7 @@ const Messages = (() => {
     const buf = ((prev && prev.rest) || '') + text;
     const lines = buf.split(/\r?\n/);
     const rest = lines.pop();
-    state[sk] = { rest, open: prev && prev.open, openAt: prev && prev.openAt };
+    state[sk] = { rest, open: prev && prev.open, openAt: prev && prev.openAt, json: prev && prev.json };
     for (const line of lines) {
       if (!line.trim()) continue;
       if (CHROMIUM_LOG.test(line)) continue;
@@ -123,12 +173,40 @@ const Messages = (() => {
       // los 4xx/5xx de las peticiones ya los registra el panel Red (con el dispositivo): evitar duplicados
       if (hit && hit.lang === 'HTTP' && origin === 'servidor') hit = null;
       const s = state[sk];
+      const trimmed = line.trim();
+      // Bloques JSON que vienen en las líneas siguientes a un mensaje (Laravel, Node, etc.).
+      if (s.json) {
+        s.json.lines.push(line);
+        const joined = s.json.lines.join('\n');
+        const end = jsonEnd(joined, s.json.start);
+        if (end >= 0) {
+          if (s.json.it) { s.json.it.detail.push(joined); hydrate(s.json.it); render(); }
+          s.json = null; s.openAt = Date.now();
+        } else if (joined.length > 200000 || s.json.lines.length > 500) {
+          s.json = null;
+        }
+        continue;
+      }
+      if (s.open && Date.now() - s.openAt < 4000 && (trimmed.startsWith('{') || trimmed.startsWith('['))) {
+        if (jsonEnd(trimmed, 0) >= 0) {
+          s.open.detail.push(trimmed);
+          s.openAt = Date.now();
+          hydrate(s.open);
+          render();
+          continue;
+        }
+        s.json = { lines: [line], it: s.open, start: line.indexOf(trimmed[0]) };
+        s.openAt = Date.now();
+        continue;
+      }
       if (hit && s.open && s.open.lang === hit.lang && s.open.title.startsWith('Traceback') && Date.now() - s.openAt < 1500 && !CONT.test(line)) {
         // última línea de un traceback de Python: es el mensaje real
-        s.open.detail.push(s.open.title);
-        s.open.title = line.trim();
-        s.open.key = `Python|${norm(line)}`;
+        const openIt = s.open;
+        openIt.detail.push(openIt.title);
+        openIt.title = line.trim();
+        openIt.key = `Python|${norm(line)}`;
         s.open = null;
+        hydrate(openIt);
         render();
       } else if (hit &&!(s.open && s.open.lang === hit.lang && CONT.test(line))) {
         s.open = add({ ...hit, origin, line });
@@ -136,6 +214,7 @@ const Messages = (() => {
       } else if (s.open && Date.now() - s.openAt < 1500 && (CONT.test(line) || /^\w+(?:Error|Exception)\b/.test(line))) {
         if (s.open.detail.length < 60 && s.open.count === 1) s.open.detail.push(line);
         s.openAt = Date.now();
+        hydrate(s.open);
         render();
       } else {
         s.open = null;
@@ -153,6 +232,30 @@ const Messages = (() => {
     const where = source ? ` (${source.split('/').pop()}:${lineNo})` : '';
     const sev = isErr ? 'error' : isWarn ? 'warning' : 'notice';
     const it = add({ lang: 'JavaScript', sev, origin: device, line: `${message}${where}` });
+    return it;
+  }
+
+  // Consola estructurada enviada por el preload de la vista: conserva arrays y objetos
+  // reales (el evento console-message de Electron solo da «[object Object]»).
+  function fromConsoleData(device, payload) {
+    if (!payload || typeof payload !== 'object') return;
+    const lv = payload.level === 'warn' ? 'warning' : payload.level;
+    const isErr = lv === 'error';
+    const isWarn = lv === 'warning';
+    if (!isErr && !isWarn && !(showLogs && (lv === 'info' || lv === 'log' || lv === 'verbose' || lv === 'debug'))) return;
+    const where = payload.source ? ` (${String(payload.source).split('/').pop().split('?')[0]}:${payload.line || 0})` : '';
+    const sev = isErr ? 'error' : isWarn ? 'warning' : 'notice';
+    const args = Array.isArray(payload.args) ? payload.args : [];
+    // Los objetos/arrays distintos registrados desde la misma línea no deben fusionarse.
+    const keyExtra = args.length ? JSON.stringify(args).slice(0, 1000) : '';
+    const it = add({ lang: 'JavaScript', sev, origin: device, line: `${payload.text || '(objeto)'}${where}`, keyExtra });
+    if (!it) return;
+    if (args.length) {
+      it.data = args.length === 1 ? args[0] : { args };
+      it.dataParsed = true;
+      if (!it.dataExpanded) it.dataExpanded = new Set();
+      render();
+    }
     return it;
   }
 
@@ -177,7 +280,7 @@ const Messages = (() => {
     ai: i.ai && i.ai.state === 'done' && i.ai.ok ? i.ai.text : undefined
   }));
 
-  function reset() { items.length = 0; queue.length = 0; autoCount = 0; langFilter = null; render(); }
+  function reset() { items.length = 0; queue.length = 0; autoCount = 0; langFilter = null; feedText.state = {}; render(); }
 
   // Errores que PHP/otros imprimen dentro del propio HTML de la página.
   function fromPageText(device, text) {
@@ -234,6 +337,115 @@ const Messages = (() => {
     for (const it of shown) ui.list.appendChild(row(it));
   }
 
+  /* ---------- visor de arrays y objetos ---------- */
+  const SPECIAL = {
+    undefined: (v) => v.value || 'undefined',
+    function: (v) => v.value || '[Function]',
+    error: (v) => `${v.name || 'Error'}: ${v.message || ''}`,
+    date: (v) => `Date(${v.value})`,
+    regexp: (v) => v.value || '',
+    element: (v) => v.value || '[Element]',
+    node: (v) => v.value || '[Nodo]',
+    window: () => '[Window]',
+    circular: () => '[Circular]',
+    truncated: (v) => v.value || '…',
+    bigint: (v) => v.value || '',
+    symbol: (v) => v.value || '',
+    number: (v) => v.value || ''
+  };
+  const isDataObject = (v) => v !== null && typeof v === 'object';
+  const isContainer = (v) => isDataObject(v) && !v.__lpType;
+
+  function specialText(v) {
+    const f = SPECIAL[v.__lpType];
+    return f ? f(v) : JSON.stringify(v);
+  }
+
+  function jsonSummary(v) {
+    if (Array.isArray(v)) return `Array(${v.length})`;
+    const n = Object.keys(v).length;
+    return `{${n}}`;
+  }
+
+  function addJsonValue(parent, value, key, path, depth, it, budget) {
+    if (budget.n-- <= 0) return;
+    const row = document.createElement('div');
+    row.className = 'json-row';
+    const keyEl = document.createElement('span');
+    keyEl.className = 'json-key';
+    keyEl.textContent = key;
+    parent.appendChild(row);
+    if (!isContainer(value)) {
+      row.appendChild(keyEl);
+      const val = document.createElement('span');
+      if (value === null) { val.className = 'json-null'; val.textContent = 'null'; }
+      else if (typeof value === 'string') { val.className = 'json-str'; val.textContent = `"${value}"`; }
+      else if (typeof value === 'number') { val.className = 'json-num'; val.textContent = String(value); }
+      else if (typeof value === 'boolean') { val.className = 'json-bool'; val.textContent = String(value); }
+      else { val.className = 'json-special'; val.textContent = specialText(value); }
+      if (value && value.__lpType === 'error' && value.stack) val.title = value.stack;
+      row.appendChild(val);
+      return;
+    }
+    const entries = Array.isArray(value) ? value.map((v, i) => [String(i), v]) : Object.entries(value);
+    const open = it.dataExpanded.has(path) || depth === 0;
+    const tog = document.createElement('span');
+    tog.className = 'json-tog';
+    tog.textContent = entries.length ? (open ? '▾' : '▸') : '·';
+    const sum = document.createElement('span');
+    sum.className = 'json-summ';
+    sum.textContent = jsonSummary(value);
+    row.append(tog, keyEl, sum);
+    if (!entries.length) return;
+    const kids = document.createElement('div');
+    kids.className = 'json-children';
+    kids.hidden = !open;
+    parent.appendChild(kids);
+    row.title = open ? 'Contraer' : 'Expandir';
+    row.onclick = () => {
+      const nowOpen = kids.hidden;
+      kids.hidden = !nowOpen;
+      tog.textContent = nowOpen ? '▾' : '▸';
+      row.title = nowOpen ? 'Contraer' : 'Expandir';
+      if (nowOpen) it.dataExpanded.add(path); else it.dataExpanded.delete(path);
+    };
+    for (const [k, v] of entries) {
+      addJsonValue(kids, v, Array.isArray(value) ? `${k}:` : `${k}:`, `${path}.${k}`, depth + 1, it, budget);
+      if (budget.n <= 0) { const more = document.createElement('div'); more.className = 'json-summ'; more.textContent = '… (demasiados datos)'; kids.appendChild(more); break; }
+    }
+  }
+
+  function fillData(it, box) {
+    if (!it.dataExpanded) it.dataExpanded = new Set();
+    box.textContent = '';
+    const bar = document.createElement('div');
+    bar.className = 'json-bar';
+    const copy = document.createElement('button');
+    copy.textContent = '⧉ Copiar JSON';
+    copy.onclick = () => {
+      const text = JSON.stringify(it.data, null, 2);
+      navigator.clipboard.writeText(text).then(() => ui && ui.toast && ui.toast('JSON copiado'), () => {});
+    };
+    const hint = document.createElement('span');
+    hint.className = 'muted';
+    hint.textContent = Array.isArray(it.data) ? `${it.data.length} elementos · pulsa para desplegar` : 'pulsa cada fila para desplegar';
+    bar.append(copy, hint);
+    box.appendChild(bar);
+    const tree = document.createElement('div');
+    tree.className = 'json-tree';
+    box.appendChild(tree);
+    const rootKey = '';
+    addJsonValue(tree, it.data, rootKey, '$', 0, it, { n: 2500 });
+  }
+
+  function dataBlock(it) {
+    const box = document.createElement('div');
+    box.className = 'msg-data';
+    box.hidden = !it.dataOpen;
+    if (it.dataOpen) fillData(it, box);
+    return box;
+  }
+
   function row(it) {
     const r = document.createElement('div');
     r.className = `msg sev-${it.sev}`;
@@ -278,7 +490,17 @@ const Messages = (() => {
       if (!it.ai || it.ai.state === 'done') explain(it);
     };
     actions.append(copy, explainBtn);
+    if (it.data !== undefined) {
+      if (!it.dataExpanded) it.dataExpanded = new Set();
+      const dataBtn = document.createElement('button');
+      dataBtn.textContent = it.dataOpen ? '🧾 Ocultar datos' : '🧾 Ver datos';
+      dataBtn.title = 'Mostrar el array u objeto como árbol desplegable';
+      dataBtn.classList.toggle('active', !!it.dataOpen);
+      dataBtn.onclick = () => { it.dataOpen = !it.dataOpen; render(); };
+      actions.append(dataBtn);
+    }
     r.append(actions, out);
+    if (it.data !== undefined) r.appendChild(dataBlock(it));
     return r;
   }
 
@@ -303,5 +525,5 @@ const Messages = (() => {
     render();
   }
 
-  return { init, feedText, fromConsole, fromLoadFailure, fromPageText, fromNetwork, fromRemote, snapshot, reset, onChange: (cb) => { changeCb = cb; }, setAi: (v, local) => { aiOn = v; aiLocal = !!local; }, classify };
+  return { init, feedText, fromConsole, fromConsoleData, fromLoadFailure, fromPageText, fromNetwork, fromRemote, snapshot, reset, onChange: (cb) => { changeCb = cb; }, setAi: (v, local) => { aiOn = v; aiLocal = !!local; }, classify };
 })();

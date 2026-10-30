@@ -16,7 +16,6 @@ let zoomed = null;     // vista ampliada a pantalla grande
 const rotated = new Set(); // ids de dispositivos girados a horizontal
 let netPending = [];   // peticiones de vistas que aún no han emitido dom-ready (no se conoce su webContents)
 let toolsDock = 'bottom'; // dónde viven las herramientas: 'bottom' (panel inferior) o 'side' (panel lateral derecho)
-let dtMaximized = false;  // DevTools a pantalla completa
 
 const TOOL_PANES = ['tab-smart', 'tab-inspector', 'tab-csslint', 'tab-logs', 'tab-storage', 'tab-audit'];
 
@@ -239,7 +238,11 @@ function addFrame(device) {
     if (document.activeElement !== $('url')) $('url').value = e.url;
     Mirror.onNavigate(f, e.url);    // también al cambiar el ancla (#)
   });
-  f.view.addEventListener('console-message', (e) => Messages.fromConsole(device.name, e.level, e.message, e.sourceId, e.line));
+  f.view.addEventListener('console-message', (e) => {
+    // Los mensajes con objetos/arrays llegan por el preload con datos reales (canal «console»).
+    if (e.message && e.message.startsWith('\u2063')) return;
+    Messages.fromConsole(device.name, e.level, e.message, e.sourceId, e.line);
+  });
   f.view.addEventListener('did-fail-load', (e) => {
     if (e.isMainFrame && e.errorCode !== -3) Messages.fromLoadFailure(device.name, e.errorCode, e.errorDescription, e.validatedURL);
   });
@@ -255,6 +258,7 @@ function addFrame(device) {
     }
   });
   f.view.addEventListener('ipc-message', (e) => {
+    if (e.channel === 'console') { Messages.fromConsoleData(device.name, e.args[0]); return; }
     if (e.channel !== 'sync') return;
     Mirror.onSync(device.id, e.args[0]);   // clic, texto, scroll… se replican en las demás vistas y en el túnel
   });
@@ -271,7 +275,6 @@ function setZoom(f) {
     prev.zoomBtn.textContent = '⛶ Ampliar';
     if (prev.ph) { prev.ph.remove(); prev.ph = null; }
     if (prev.closeBtn) { prev.closeBtn.remove(); prev.closeBtn = null; }
-    window.liveproject.devtoolsVisible(!$('settings').open);
   }
   zoomed = f;
   if (f) {
@@ -284,8 +287,8 @@ function setZoom(f) {
     f.closeBtn.type = 'button';
     f.closeBtn.title = 'Salir del modo ampliado (Esc)';
     f.closeBtn.onclick = () => setZoom(null);
-    window.liveproject.devtoolsVisible(false); // las DevTools son una vista nativa que taparía la ampliación
   }
+  syncDevTools(); // las DevTools son una vista nativa que taparía la ampliación
   layout();
 }
 
@@ -379,13 +382,81 @@ function refreshTargets() {
   if (refreshCmpDevices) refreshCmpDevices();
 }
 
+// Anchos del panel lateral derecho: uno para las pestañas normales y otro, más ancho,
+// para cuando las DevTools viven ahí (sus paneles necesitan bastantes píxeles).
+const SIDE_DEFAULT_W = 420;
+const SIDE_MIN_W = 280;
+const DT_SIDE_MIN_W = 560;
+let sideWidth = 0;
+let dtSideWidth = 0;
+
+const sideMaxWidth = () => Math.max(SIDE_MIN_W, window.innerWidth - 300);
+const clampSideWidth = (w) => Math.round(Math.min(sideMaxWidth(), Math.max(SIDE_MIN_W, w || 0)));
+const devtoolsInSide = () => toolsDock === 'side' && activeTab === 'devtools';
+
+function loadSideWidths() {
+  try {
+    const w = parseInt(localStorage.getItem('lp-side-w'), 10);
+    if (w) sideWidth = w;
+    const d = parseInt(localStorage.getItem('lp-side-w-devtools'), 10);
+    if (d) dtSideWidth = d;
+  } catch { /* sin almacenamiento */ }
+  if (!sideWidth) sideWidth = SIDE_DEFAULT_W;
+}
+
+function saveSideWidths() {
+  try {
+    localStorage.setItem('lp-side-w', clampSideWidth(sideWidth));
+    if (dtSideWidth) localStorage.setItem('lp-side-w-devtools', clampSideWidth(dtSideWidth));
+  } catch { /* sin almacenamiento */ }
+}
+
+// Aplica el ancho que corresponde: las DevTools usan un panel más ancho que Mensajes/Red.
+function applySideWidth() {
+  const want = devtoolsInSide()
+    ? (dtSideWidth || Math.max(DT_SIDE_MIN_W, Math.round(window.innerWidth * 0.46)))
+    : sideWidth;
+  $('messages').style.width = `${clampSideWidth(want)}px`;
+}
+
+function rememberSideWidth(w) {
+  if (devtoolsInSide()) dtSideWidth = clampSideWidth(w);
+  else sideWidth = clampSideWidth(w);
+}
+
 function paneBounds() {
-  const box = dtMaximized ? $('workspace') : $('dt-content');
-  const r = box.getBoundingClientRect();
+  const r = $('dt-content').getBoundingClientRect();
   return { x: Math.round(r.x), y: Math.round(r.y), width: Math.max(1, Math.round(r.width)), height: Math.max(1, Math.round(r.height)) };
 }
 
-function reportBounds() { if (inspected) window.liveproject.devtoolsBounds(paneBounds()); }
+// Las DevTools son una vista nativa: hay que moverla en cada fotograma mientras se arrastra
+// un separador o cambia el tamaño; si solo se moviera al soltar, se quedaría tapando el panel.
+let boundsFrame = 0;
+function queueBounds() {
+  if (boundsFrame) return;
+  boundsFrame = requestAnimationFrame(() => { boundsFrame = 0; reportBounds(); });
+}
+
+function reportBounds() {
+  if (!inspected) return;
+  const b = paneBounds();
+  if (b.width < 2 || b.height < 2) return;   // el panel está oculto: no mover la vista nativa
+  window.liveproject.devtoolsBounds(b);
+}
+
+// ¿Deben verse las DevTools ahora? (pestaña activa, panel visible y sin diálogos encima)
+function devToolsShouldShow() {
+  return !!inspected && activeTab === 'devtools' && toolsVisible() && !zoomed && !document.querySelector('dialog[open]');
+}
+
+// Oculta o vuelve a mostrar las DevTools sin destruirlas: al cambiar de pestaña lateral
+// (Mensajes, Red…) o abrir un diálogo se conserva el estado (elemento inspeccionado, consola…).
+function syncDevTools() {
+  if (!inspected) return;
+  const show = devToolsShouldShow();
+  window.liveproject.devtoolsVisible(show);
+  if (show) queueBounds();
+}
 
 function detachInspector() {
   if (!inspected) return;
@@ -397,10 +468,18 @@ async function attachInspector() {
   if (inspected || !toolsVisible() || activeTab !== 'devtools') return;
   const f = frames.get(inspectId);
   if (!f || !f.ready) return;
+  const b = paneBounds();
+  if (b.width < 2 || b.height < 2) return;   // aún no hay sitio: se reintenta al mostrar el panel
   const targetId = f.view.getWebContentsId();
   inspected = { targetId };
   $('dt-content').textContent = '';
-  await window.liveproject.devtoolsShow(targetId, paneBounds());
+  const ok = await window.liveproject.devtoolsShow(targetId, b);
+  if (!ok) {
+    inspected = null;
+    $('dt-content').innerHTML = '<div class="hint">No se pudieron abrir las DevTools de esta vista.</div>';
+    return;
+  }
+  syncDevTools();
 }
 
 function switchInspector(id) {
@@ -410,10 +489,12 @@ function switchInspector(id) {
   $('inspect-target').value = id;
   Perf.render();
   Smart.reset();
+  applySideWidth();
   if (activeTab === 'smart') Smart.analyze(); else attachInspector();
 }
 
 function setTab(tab) {
+  const leavingDev = activeTab === 'devtools' && tab !== 'devtools';
   activeTab = tab;
   document.querySelectorAll('#bottom-bar .tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $('tab-smart').hidden = tab !== 'smart';
@@ -423,8 +504,15 @@ function setTab(tab) {
   $('tab-storage').hidden = tab !== 'storage';
   $('tab-audit').hidden = tab !== 'audit';
   $('target-label').hidden = tab === 'logs' || tab === 'csslint';
-  if (tab === 'devtools') attachInspector(); else detachInspector();
+  if (toolsDock === 'side') {
+    // Si las DevTools viven a la derecha, hay que asegurarse de que el panel y su pestaña estén visibles.
+    if (tab === 'devtools') { if ($('messages').hidden) showSide(true); setSide('tools'); }
+    else if (leavingDev) applySideWidth();
+  }
+  if (tab === 'devtools') attachInspector();
+  else if (leavingDev) detachInspector();   // cambiar a otra herramienta cierra las DevTools (se reabren al volver)
   if (tab === 'smart') Smart.analyze();
+  updateDockButtons();
 }
 
 /* ---------------- herramientas: panel inferior ⇄ panel lateral derecho ---------------- */
@@ -445,6 +533,22 @@ function mountTools(barParent, paneParent) {
   }
 }
 
+// Etiqueta y estado de los dos botones que acoplan las herramientas (el del panel y el de las DevTools).
+function updateDockButtons() {
+  const side = toolsDock === 'side';
+  const label = side ? '⇲ Abajo' : '⇱ Derecha';
+  const title = side
+    ? 'Devolver las herramientas al panel inferior'
+    : 'Acoplar las herramientas al panel lateral derecho y liberar espacio vertical';
+  for (const id of ['btn-dock', 'dt-dock']) {
+    const b = $(id);
+    if (!b) continue;
+    b.textContent = label;
+    b.title = title;
+    b.classList.toggle('active', side);
+  }
+}
+
 // Traslada las herramientas al panel lateral derecho (libera espacio vertical) o de vuelta abajo.
 function dockTools(to) {
   toolsDock = to;
@@ -454,27 +558,26 @@ function dockTools(to) {
     $('splitter').hidden = true;
     $('btn-panel').classList.remove('active');
     $('btn-panel').title = 'Traer las herramientas al panel inferior';
-    $('btn-dock').textContent = '⇲ Abajo';
-    $('btn-dock').title = 'Devolver las herramientas al panel inferior';
     document.body.classList.add('tools-side');
     showSide(true);
     setSide('tools');
+    applySideWidth();
   } else {
     mountTools($('bottom'), $('bottom'));
     $('bottom').hidden = false;
     $('splitter').hidden = false;
     $('btn-panel').classList.add('active');
     $('btn-panel').title = 'Mostrar/ocultar panel inferior';
-    $('btn-dock').textContent = '⇱ Derecha';
-    $('btn-dock').title = 'Colocar las herramientas en el panel lateral derecho y liberar espacio';
     document.body.classList.remove('tools-side');
     // el panel lateral no puede quedarse vacío: vuelve a Mensajes
     const active = document.querySelector('.stab2.active');
     if (active && active.dataset.side === 'tools') setSide('messages');
+    applySideWidth();
   }
   try { localStorage.setItem('lp-tools-dock', to); } catch { /* sin almacenamiento */ }
+  updateDockButtons();
   layout();
-  reportBounds();
+  queueBounds();
 }
 
 function togglePanel(show) {
@@ -483,8 +586,10 @@ function togglePanel(show) {
   bottom.hidden = !show;
   $('splitter').hidden = !show;
   $('btn-panel').classList.toggle('active', show);
-  if (show) { if (activeTab === 'devtools') attachInspector(); else if (activeTab === 'smart') Smart.analyze(); } else detachInspector();
+  if (show) { if (activeTab === 'devtools') attachInspector(); else if (activeTab === 'smart') Smart.analyze(); }
+  syncDevTools();
   layout();
+  queueBounds();
 }
 
 function initSplitter() {
@@ -495,13 +600,14 @@ function initSplitter() {
     const move = (ev) => {
       const h = Math.min(window.innerHeight - 220, Math.max(90, window.innerHeight - ev.clientY));
       $('bottom').style.height = `${h}px`;
+      queueBounds();   // las DevTools siguen al separador en vivo
     };
     const up = () => {
       document.body.classList.remove('dragging');
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
       layout();
-      reportBounds();
+      queueBounds();
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
@@ -600,10 +706,10 @@ function openAiSettings() {
 }
 
 function openSettings() {
-  window.liveproject.devtoolsVisible(false);
   draft = devices.map((d) => ({ ...d }));
   renderDraft();
   $('settings').showModal();
+  syncDevTools();
 }
 
 function addDraft(name, width, height, type) {
@@ -1243,9 +1349,11 @@ function setSide(name) {
     // las herramientas se trasladan al panel lateral la primera vez que se abre esta pestaña
     if (toolsDock === 'bottom') { dockTools('side'); return; }
     if (activeTab === 'devtools') attachInspector(); else if (activeTab === 'smart') Smart.analyze();
-  } else if (toolsDock === 'side' && activeTab === 'devtools') {
-    detachInspector();   // las DevTools no pueden quedar flotando sobre otro panel
   }
+  // Al cambiar de pestaña lateral no se destruyen las DevTools: solo se ocultan, y al volver
+  // a «Herramientas» reaparecen con el mismo elemento inspeccionado y el mismo historial.
+  applySideWidth();
+  syncDevTools();
 }
 
 // Muestra u oculta el panel lateral derecho completo (mensajes, red, enlaces, rutas, historial y herramientas).
@@ -1253,24 +1361,36 @@ function showSide(show) {
   $('messages').hidden = !show;
   $('side-splitter').hidden = !show;
   $('btn-msgs').classList.toggle('active', show);
-  if (!show && toolsDock === 'side') detachInspector();
+  if (show) {
+    applySideWidth();
+    if (toolsDock === 'side' && activeTab === 'devtools') attachInspector();
+  }
+  syncDevTools();
   layout();
+  queueBounds();
 }
 
 function initSideSplitter() {
   const sp = $('side-splitter');
   const side = $('messages');
-  try { const w = parseInt(localStorage.getItem('lp-side-w'), 10); if (w) side.style.width = `${w}px`; } catch { /* sin almacenamiento */ }
+  loadSideWidths();
+  applySideWidth();
   sp.addEventListener('mousedown', (e) => {
     e.preventDefault();
     document.body.classList.add('dragging', 'dragging-col');
-    const move = (ev) => { side.style.width = `${Math.min(window.innerWidth - 300, Math.max(280, window.innerWidth - ev.clientX))}px`; };
+    const move = (ev) => {
+      const w = clampSideWidth(window.innerWidth - ev.clientX);
+      side.style.width = `${w}px`;
+      rememberSideWidth(w);
+      queueBounds();   // las DevTools acompañan al separador en vivo
+    };
     const up = () => {
       document.body.classList.remove('dragging', 'dragging-col');
       window.removeEventListener('mousemove', move);
       window.removeEventListener('mouseup', up);
-      try { localStorage.setItem('lp-side-w', parseInt(side.style.width, 10)); } catch { /* sin almacenamiento */ }
+      saveSideWidths();
       layout();
+      queueBounds();
     };
     window.addEventListener('mousemove', move);
     window.addEventListener('mouseup', up);
@@ -1343,13 +1463,14 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   };
   $('btn-close-panel').onclick = () => togglePanel(false);
   $('btn-dock').onclick = () => dockTools(toolsDock === 'side' ? 'bottom' : 'side');
-  $('dt-max').onclick = () => {
-    dtMaximized = !dtMaximized;
-    $('dt-max').textContent = dtMaximized ? '⛶ Restaurar' : '⛶ Ampliar';
-    $('dt-max').classList.toggle('active', dtMaximized);
-    reportBounds();
+  $('dt-dock').onclick = () => dockTools(toolsDock === 'side' ? 'bottom' : 'side');
+  $('dt-dev').onclick = () => {
+    const ids = [...frames.keys()];
+    if (!ids.length) return toast('No hay vistas activas');
+    const i = ids.indexOf(inspectId);
+    switchInspector(ids[(i + 1) % ids.length]);
+    toast(`DevTools de ${(frames.get(inspectId) || { device: {} }).device.name}`);
   };
-  $('dt-dev').onclick = () => { setSide('messages'); switchInspector(inspectId); toast('Usa el selector «Dispositivo» de la barra para cambiar de vista'); };
   $('smart-open').onclick = async () => {
     if (!currentUrl) return toast('Abre un proyecto primero');
     const r = await window.liveproject.editorOpenUrl(viewUrl || currentUrl);
@@ -1359,11 +1480,15 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   $('inspect-target').onchange = (e) => switchInspector(e.target.value);
   document.querySelectorAll('#bottom-bar .tab').forEach((b) => { b.onclick = () => setTab(b.dataset.tab); });
   $('chk-fit').onchange = layout;
-  window.addEventListener('resize', layout);
+  window.addEventListener('resize', () => { applySideWidth(); layout(); queueBounds(); });
   new ResizeObserver(layout).observe(stage);
-  new ResizeObserver(reportBounds).observe($('dt-content'));
-  window.addEventListener('resize', reportBounds);
-  $('settings').addEventListener('close', () => window.liveproject.devtoolsVisible(true));
+  new ResizeObserver(queueBounds).observe($('dt-content'));
+  window.addEventListener('resize', queueBounds);
+  $('settings').addEventListener('close', () => syncDevTools());
+  // Cualquier diálogo abierto tapa las DevTools (son una vista nativa por encima del HTML).
+  const dialogWatch = new MutationObserver(() => syncDevTools());
+  document.querySelectorAll('dialog').forEach((d) => dialogWatch.observe(d, { attributes: true, attributeFilter: ['open'] }));
+  updateDockButtons();
   Perf.init({ bar: $('perfbar'), getSelected: () => inspectId, onSelect: (id) => switchInspector(id) });
   initSplitter();
   initLogBar();

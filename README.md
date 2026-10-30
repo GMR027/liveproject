@@ -26,7 +26,11 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
   han iniciado sesión todas. Se desactiva con *Vista → Sincronizar scroll, clics, formularios y navegación*.
 - **Inspector inteligente** (abajo): árbol del DOM con barras de tamaño (rojo = desborda el viewport), modelo de caja, estilos,
   resumen, problemas de accesibilidad/responsive/contraste, paleta y encabezados. Pasa el ratón por un elemento para resaltarlo en la página.
-- **DevTools**: las DevTools reales de Chromium (Elements, Console, Sources, Network…) del dispositivo elegido, ampliables a pantalla completa.
+  Al elegir un componente (en el árbol o con *Elegir en la página*) se muestran **todas sus clases**, su ruta de ancestros, su
+  **estructura** (hijos y nietos con sus clases) y el HTML completo; el árbol se despliega y se desplaza hasta el elemento elegido.
+- **DevTools**: las DevTools reales de Chromium (Elements, Console, Sources, Network…) del dispositivo elegido.
+  Con **⇱ Derecha** se acoplan al panel lateral derecho en un área más ancha (y ajustable con el separador), y al cambiar a otra pestaña
+  lateral se ocultan sin perder el elemento inspeccionado ni el historial de la consola. El botón **⇄ Dispositivo** pasa al siguiente dispositivo.
 - **Emulación por dispositivo** (botón 🌐 en el título de cada vista): red (3G / 4G / sin conexión), CPU ×4 o ×6 y preferencias del sistema
   (tema claro/oscuro, movimiento reducido, colores forzados) aplicadas solo a esa vista, con el protocolo de DevTools.
 - **Servidor**: salida del proceso en vivo, con filtro, desplazamiento automático y envío de texto al servidor (stdin) para responder a sus preguntas.
@@ -36,6 +40,8 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
 - **Panel lateral** (pestañas, ancho ajustable):
   - **Mensajes**: errores/avisos de PHP, Python, Node, Ruby, Go, Java, C#, SQL, HTTP y JavaScript del navegador, con etiqueta de lenguaje
     y color por gravedad. Detecta los de la salida del servidor y los impresos en la propia página (opcionalmente también los `console.log`).
+    Los mensajes que contienen **arrays u objetos** (consola del navegador o JSON del servidor) tienen **🧾 Ver datos**: se despliegan como
+    un árbol con cada elemento, sus claves y valores, y se pueden copiar como JSON.
   - **Red**: todas las peticiones de cada vista (método, estado, tipo, tamaño, tiempo, cabeceras clave). Filtros por tipo/URL y «solo fallos»;
     los 4xx/5xx y fallos de red también se añaden a *Mensajes*. Vista de **cascada** (waterfall) y **exportación a HAR** (`.liveproject/reports/`).
   - **Enlaces**: comprueba enlaces, imágenes, scripts, estilos, iframes y medios (HEAD/GET), anclajes `#id` inexistentes, contenido mixto y redirecciones.
@@ -45,6 +51,7 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
   - **Historial**: cada sesión se guarda sola en `<proyecto>/.liveproject/sessions/<fecha>.json` (últimas 50). Puedes reabrirlas o borrarlas.
   - **Herramientas**: las mismas herramientas del panel inferior (Inspector inteligente, DevTools, CSS responsive, Servidor, Almacenamiento y Auditoría)
     trasladadas aquí con el botón **⇱ Derecha** para liberar espacio vertical. Con **⇲ Abajo** (o con la pestaña 🔧 Herramientas) vuelven al panel inferior; la posición se recuerda.
+    Las DevTools ocupan aquí un panel más ancho y se redimensionan en vivo con el separador; al visitar otra pestaña lateral se ocultan, pero conservan su estado.
 - **Comparar capturas**: `🧰 Herramientas → 🔍 Comparar capturas` contrasta la captura actual con la anterior y guarda la imagen de
   diferencias en `.liveproject/screenshots/` (la primera vez fija la base).
 - **CSS responsive** (panel inferior): linter que analiza cada dispositivo activo con su viewport real (desbordes, anchos fijos, objetivos táctiles,

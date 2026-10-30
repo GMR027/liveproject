@@ -174,8 +174,8 @@
     </div>
     <div id="tab-inspector" class="pane" hidden>
       <div class="dt-bar">
-        <button id="dt-max" title="Ampliar las DevTools a todo el espacio de trabajo">⛶ Ampliar</button>
-        <button id="dt-dev" title="Cambiar de dispositivo para las DevTools">⇄ Dispositivo</button>
+        <button id="dt-dock" title="Acoplar las herramientas al panel lateral derecho y liberar espacio vertical">⇱ Derecha</button>
+        <button id="dt-dev" title="Pasar las DevTools al siguiente dispositivo">⇄ Dispositivo</button>
         <span class="spacer"></span>
         <span class="muted dt-note">DevTools reales de Chromium</span>
       </div>
@@ -433,12 +433,12 @@
           <details><summary>✨ Inspector inteligente</summary>
             <ul>
               <li>Árbol del DOM con barras de tamaño: las <span class="pill bad">rojas</span> indican elementos que desbordan el ancho de la pantalla.</li>
-              <li>Selecciona un nodo para ver su <b>modelo de caja</b>, estilos calculados y fragmento HTML.</li>
-              <li><b>🎯 Elegir en la página</b>: haz clic en la vista y se selecciona el elemento. Al pasar el ratón por el árbol, se resalta en la página.</li>
+              <li>Selecciona un nodo para ver su <b>modelo de caja</b>, estilos calculados, <b>todas sus clases</b>, la ruta de ancestros, la <b>estructura</b> de sus hijos y el HTML completo.</li>
+              <li><b>🎯 Elegir en la página</b>: haz clic en la vista y se selecciona el elemento; el árbol se despliega y se desplaza hasta él. Al pasar el ratón por el árbol o por su estructura, se resalta en la página.</li>
               <li>A la derecha, un resumen: problemas de accesibilidad, responsive y contraste, paleta de colores y esquema de encabezados.</li>
               <li>Con <b>Analizar al recargar</b> se actualiza solo. Elige el dispositivo a inspeccionar en el selector <i>Dispositivo</i>.</li>
               <li>El botón <b>📝 Abrir en el editor</b> abre en tu editor el fichero del proyecto que corresponde a la página.</li>
-              <li>Las <b>DevTools</b> se pueden ampliar a todo el espacio de trabajo con <b>⛶ Ampliar</b>.</li>
+              <li>Las <b>DevTools</b> se acoplan al panel inferior o al lateral derecho y se redimensionan con el separador.</li>
               <li>En la barra de rendimiento, cada dispositivo muestra una <b>minigráfica</b> con la evolución de su nota entre recargas: si la línea baja, tu último cambio ha empeorado la web.</li>
             </ul>
           </details>
@@ -448,7 +448,7 @@
               <li><b>DevTools</b>: las herramientas reales de Chromium (Elements, Console, Sources, Network…) acopladas al dispositivo elegido.</li>
               <li><b>CSS responsive</b>: pulsa <b>▶ Analizar dispositivos activos</b> y se revisa cada pantalla con su tamaño real: desbordes, anchos fijos, objetivos táctiles pequeños, tipografía, imágenes, <code>100vh</code>, media queries… Cada hallazgo propone una corrección y, al pulsarlo, resalta el elemento en la página.</li>
               <li>Con IA conectada aparecen <b>Corregir con IA</b> y <b>💡 Revisión con IA</b>, que prioriza los problemas y propone el CSS corregido.</li>
-              <li>Las cuatro herramientas (Inspector inteligente, DevTools, CSS responsive y Servidor) viven en el panel inferior. Con el botón <b>⇱ Derecha</b> pasan al panel lateral derecho, como la pestaña <b>🔧 Herramientas</b>, y el escenario gana espacio vertical; con <b>⇲ Abajo</b> regresan abajo.</li>
+              <li>Las cuatro herramientas (Inspector inteligente, DevTools, CSS responsive y Servidor) viven en el panel inferior. Con el botón <b>⇱ Derecha</b> pasan al panel lateral derecho, como la pestaña <b>🔧 Herramientas</b>, y el escenario gana espacio vertical; con <b>⇲ Abajo</b> regresan abajo. Las DevTools usan ahí un panel más ancho (ajustable con el separador) y conservan su estado al cambiar de pestaña lateral.</li>
             </ul>
           </details>
 
@@ -459,6 +459,7 @@
               <li>Filtra por gravedad o por lenguaje (clic en la etiqueta). Pulsa el título para ver el detalle completo.</li>
               <li>Con IA conectada, <b>💡 Explicar con IA</b> te dice la causa y la solución. La casilla <i>Explicar errores automáticamente</i> lo hace sola con IA local (máx. 20 por sesión).</li>
               <li>Por defecto solo se recogen errores y avisos. Si marcas <b>Mostrar también console.log / info</b> aparecen también los mensajes informativo de la página (pueden ser muchos).</li>
+              <li>Si un mensaje trae un <b>array u objeto</b> (por ejemplo <code>console.log([{…}])</code> o un JSON impreso por el servidor), pulsa <b>🧾 Ver datos</b>: se abre un árbol para desplegar cada elemento, con sus claves y valores, y puedes copiarlo como JSON.</li>
             </ul>
           </details>
 

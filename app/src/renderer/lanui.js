@@ -73,8 +73,8 @@ const Lan = (() => {
 
   async function open() {
     set(await window.liveproject.lanStatus());
-    window.liveproject.devtoolsVisible(false);
     ui.dialog.showModal();
+    if (typeof syncDevTools === 'function') syncDevTools();
   }
 
   function init(o) {
@@ -82,7 +82,7 @@ const Lan = (() => {
     o.btn.onclick = open;
     o.toggle.onclick = toggle;
     o.close.onclick = () => o.dialog.close();
-    o.dialog.addEventListener('close', () => window.liveproject.devtoolsVisible(true));
+    o.dialog.addEventListener('close', () => { if (typeof syncDevTools === 'function') syncDevTools(); });
     window.liveproject.onLanClients((clients) => set({ clients }));
     render();
     // El origen del proyecto (el que sirve el túnel) se necesita para el espejo.

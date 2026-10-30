@@ -1,5 +1,120 @@
 // Se ejecuta dentro de cada <webview>: emite y aplica scroll/clics para sincronizar dispositivos.
-const { ipcRenderer } = require('electron');
+const { ipcRenderer, webFrame, contextBridge } = require('electron');
+
+/* ---------- consola estructurada ----------
+   El evento console-message de Electron entrega una cadena («[object Object]»,
+   «1,2,3»), así que se instala un gancho en el mundo de la página que envía los
+   arrays y objetos serializados al panel Mensajes. El gancho va en el mundo
+   principal porque el preload, con aislamiento de contexto, tiene otra consola. */
+function installConsoleHook(bridge) {
+  if (typeof bridge !== 'function' || window.__lpConsoleHooked) return;
+  window.__lpConsoleHooked = true;
+  const SENTINEL = '\u2063';
+  const MAX_DEPTH = 6;
+  const MAX_ITEMS = 300;
+
+  function serialize(value, seen, depth, budget) {
+    if (budget && budget.n-- <= 0) return { __lpType: 'truncated', value: '…' };
+    if (value === null) return null;
+    const t = typeof value;
+    if (t === 'string') return value.length > 4000 ? `${value.slice(0, 4000)}…` : value;
+    if (t === 'number') return Number.isFinite(value) ? value : { __lpType: 'number', value: String(value) };
+    if (t === 'boolean') return value;
+    if (t === 'undefined') return { __lpType: 'undefined' };
+    if (t === 'bigint') return { __lpType: 'bigint', value: `${value}n` };
+    if (t === 'symbol') return { __lpType: 'symbol', value: String(value) };
+    if (t === 'function') return { __lpType: 'function', value: `ƒ ${value.name || 'anónima'}()` };
+    if (depth > MAX_DEPTH) return { __lpType: 'truncated', value: Array.isArray(value) ? `Array(${value.length})` : '…' };
+    if (value instanceof Error) return { __lpType: 'error', name: value.name, message: value.message, stack: String(value.stack || '').slice(0, 4000) };
+    if (value instanceof Date) return { __lpType: 'date', value: value.toISOString() };
+    if (value instanceof RegExp) return { __lpType: 'regexp', value: String(value) };
+    if (typeof Element !== 'undefined' && value instanceof Element) {
+      const cls = value.classList && value.classList.length ? `.${[...value.classList].slice(0, 3).join('.')}` : '';
+      return { __lpType: 'element', value: `<${value.tagName.toLowerCase()}${value.id ? `#${value.id}` : ''}${cls}>` };
+    }
+    if (typeof Node !== 'undefined' && value instanceof Node) return { __lpType: 'node', value: value.nodeName };
+    if (typeof Window !== 'undefined' && value instanceof Window) return { __lpType: 'window', value: '[Window]' };
+    if (seen.has(value)) return { __lpType: 'circular', value: '[Circular]' };
+    seen.add(value);
+    try {
+      if (Array.isArray(value)) {
+        const out = value.slice(0, MAX_ITEMS).map((v) => serialize(v, seen, depth + 1, budget));
+        if (value.length > MAX_ITEMS) out.push({ __lpType: 'truncated', value: `… ${value.length - MAX_ITEMS} elementos más` });
+        return out;
+      }
+      if (value instanceof Map) {
+        return [...value.entries()].slice(0, MAX_ITEMS).map(([k, v]) => ({ key: serialize(k, seen, depth + 1, budget), value: serialize(v, seen, depth + 1, budget) }));
+      }
+      if (value instanceof Set) return [...value].slice(0, MAX_ITEMS).map((v) => serialize(v, seen, depth + 1, budget));
+      const out = {};
+      const keys = Object.keys(value);
+      for (let i = 0; i < keys.length && i < MAX_ITEMS; i++) {
+        const k = keys[i];
+        try { out[k] = serialize(value[k], seen, depth + 1, budget); }
+        catch { out[k] = { __lpType: 'error', name: 'Error', message: '[no accesible]' }; }
+      }
+      if (keys.length > MAX_ITEMS) out['…'] = `${keys.length - MAX_ITEMS} claves más`;
+      return out;
+    } catch {
+      return { __lpType: 'error', name: 'Error', message: '[no serializable]' };
+    } finally {
+      seen.delete(value);
+    }
+  }
+
+  function preview(value) {
+    if (value === null) return 'null';
+    if (Array.isArray(value)) return `Array(${value.length})`;
+    if (value instanceof Error) return `${value.name}: ${value.message}`;
+    if (typeof value === 'object') {
+      if (value instanceof Date) return value.toISOString();
+      if (value instanceof Map) return `Map(${value.size})`;
+      if (value instanceof Set) return `Set(${value.size})`;
+      return '{…}';
+    }
+    return String(value);
+  }
+
+  // Primera línea de la pila que no sea este gancho: sitúa el mensaje en su fichero de la página.
+  function site() {
+    const lines = String((new Error()).stack || '').split('\n').slice(1);
+    for (const l of lines) {
+      if (/installConsoleHook|webview-preload/.test(l)) continue;
+      const m = l.match(/(https?:\/\/[^\s)]+|file:\/\/[^\s)]+):(\d+):(\d+)/);
+      if (m) return { source: m[1], line: parseInt(m[2], 10) };
+    }
+    return { source: '', line: 0 };
+  }
+
+  for (const level of ['log', 'info', 'warn', 'error', 'debug']) {
+    const original = console[level];
+    if (typeof original !== 'function') continue;
+    console[level] = function (...args) {
+      try {
+        const hasObject = args.some((a) => a !== null && typeof a === 'object');
+        if (hasObject) {
+          const at = site();
+          bridge({
+            level,
+            text: args.map(preview).join(' '),
+            args: args.map((a) => serialize(a, new Set(), 0, { n: 4000 })),
+            source: at.source,
+            line: at.line
+          });
+          // la copia nativa de esta llamada se reconoce por el separador invisible
+          return original.apply(console, [SENTINEL, ...args]);
+        }
+      } catch { /* nunca romper la consola de la página */ }
+      return original.apply(console, args);
+    };
+  }
+}
+
+try {
+  contextBridge.exposeInMainWorld('__lpConsoleBridge', (payload) => ipcRenderer.sendToHost('console', payload));
+  const run = webFrame.executeJavaScript(`(${installConsoleHook.toString()})(window.__lpConsoleBridge);`);
+  if (run && run.catch) run.catch(() => {});
+} catch { /* sin puente de consola */ }
 
 // Mientras se aplica un evento remoto no se reemite (evita bucles de eco entre vistas).
 let applyUntil = 0;

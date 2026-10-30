@@ -296,15 +296,21 @@ ipcMain.handle('devtools:show', (_e, { targetId, bounds }) => {
   closeDevTools();
   const target = webContents.fromId(targetId);
   if (!target || !win) return false;
+  const b = bounds || {};
+  if (!(b.width >= 2 && b.height >= 2)) return false;   // panel oculto o sin tamaño: no crear la vista
   dtView = new WebContentsView();
   win.contentView.addChildView(dtView);
-  dtView.setBounds(bounds);
+  dtView.setBounds({ x: Math.round(b.x) || 0, y: Math.round(b.y) || 0, width: Math.round(b.width), height: Math.round(b.height) });
   dtTarget = target;
   target.setDevToolsWebContents(dtView.webContents);
   target.openDevTools();
   return true;
 });
-ipcMain.handle('devtools:bounds', (_e, bounds) => { if (dtView) dtView.setBounds(bounds); });
+ipcMain.handle('devtools:bounds', (_e, bounds) => {
+  if (!dtView || !bounds) return;
+  if (!(bounds.width >= 2 && bounds.height >= 2)) return;
+  dtView.setBounds({ x: Math.round(bounds.x) || 0, y: Math.round(bounds.y) || 0, width: Math.round(bounds.width), height: Math.round(bounds.height) });
+});
 ipcMain.handle('devtools:visible', (_e, v) => { if (dtView) dtView.setVisible(!!v); });
 ipcMain.handle('devtools:hide', closeDevTools);
 

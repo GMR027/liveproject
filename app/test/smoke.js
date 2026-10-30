@@ -97,7 +97,60 @@ app.whenReady().then(async () => {
   check('se añaden las cookies que faltaban',
     mergeCookies('', [{ name: 'a', value: '1' }, { name: 'b', value: '2' }]) === 'a=1; b=2');
 
-  // 9. Sin errores en consola
+  // 9. Inspector inteligente: clases, ruta y estructura del elemento seleccionado
+  const sm = await js(`(()=>{ const d = pageAnalyze();
+    if (!d) return null;
+    let n = null; const walk = (x) => { if (!n && x.c && x.c.includes('.')) n = x; x.ch.forEach(walk); }; walk(d.tree);
+    if (!n) return null;
+    const desc = pageDescribe(n.p);
+    return { path: n.p, c: n.c, cc: n.cc, desc };
+  })()`);
+  check('el análisis del inspector devuelve el árbol', !!sm && !!sm.path);
+  check('el árbol conserva las clases', !!sm && sm.c.includes('.'));
+  check('el detalle muestra todas las clases', !!sm && sm.desc.classes.length > 0 && sm.desc.selector.includes('.'));
+  check('el detalle muestra la ruta y la estructura', !!sm && sm.desc.ancestors.length > 0 && Array.isArray(sm.desc.subtree));
+
+  // 10. DevTools acopladas a la derecha: panel más ancho y botón de acople en su barra
+  check('la barra de DevTools tiene su botón de acople', await js(`!!document.getElementById('dt-dock')`));
+  await js(`setTab('devtools'); dockTools('side');`);
+  await new Promise((r) => setTimeout(r, 200));
+  const dtW = await js(`parseInt($('messages').style.width, 10)`);
+  check('las DevTools usan un panel lateral más ancho', dtW >= 560, `ancho ${dtW}`);
+  await js(`setTab('smart');`);
+  await new Promise((r) => setTimeout(r, 150));
+  check('al salir de DevTools vuelve el ancho normal', (await js(`parseInt($('messages').style.width, 10)`)) === 420);
+  await js(`dockTools('bottom');`);
+
+  // 12. Mensajes con arrays/objetos: datos expandibles (consola estructurada y JSON del servidor)
+  await js(`Messages.reset()`);
+  await js(`Messages.fromConsoleData('Probe', { level: 'error', text: 'Array(2)', source: 'app.js', line: 7, args: [[{ id: 1, name: 'uno' }, { id: 2, name: 'dos' }]] })`);
+  await new Promise((r) => setTimeout(r, 150));
+  check('un array del navegador llega como datos', await js(`!!document.querySelector('.msg-data')`));
+  await js(`document.querySelector('.msg-actions button:last-child').click()`);
+  await new Promise((r) => setTimeout(r, 150));
+  check('el array se despliega en filas', (await js(`document.querySelectorAll('.json-row').length`)) >= 3);
+
+  await js(`Messages.reset()`);
+  await js(`Messages.feedText('Error: fallo con datos\\n', 'servidor', 'err')`);
+  await js(`Messages.feedText('{"items":[{"id":1},{"id":2}],"ok":false}\\n', 'servidor', 'err')`);
+  await new Promise((r) => setTimeout(r, 150));
+  const jsonBtn = await js(`(()=>{const b=[...document.querySelectorAll('.msg-actions button')].find(x=>/Ver datos/.test(x.textContent)); return !!b;})()`);
+  check('un JSON del servidor se detecta como datos', jsonBtn);
+  await js(`(()=>{const b=[...document.querySelectorAll('.msg-actions button')].find(x=>/Ver datos/.test(x.textContent)); if(b) b.click(); return true;})()`);
+  await new Promise((r) => setTimeout(r, 150));
+  check('el JSON del servidor se puede desplegar', (await js(`document.querySelectorAll('.json-row').length`)) >= 3);
+
+  // JSON partido en varias escrituras del servidor
+  await js(`Messages.reset()`);
+  await js(`Messages.feedText('Error: json partido\\n', 'servidor', 'err')`);
+  await js(`Messages.feedText('{\\n', 'servidor', 'err')`);
+  await js(`Messages.feedText('"items": [1, 2]\\n', 'servidor', 'err')`);
+  await js(`Messages.feedText('}\\n', 'servidor', 'err')`);
+  await new Promise((r) => setTimeout(r, 150));
+  check('un JSON multilínea también se agrupa', await js(`!![...document.querySelectorAll('.msg-actions button')].find(x=>/Ver datos/.test(x.textContent))`));
+  await js(`Messages.reset()`);
+
+  // 11. Sin errores en consola
   check('sin errores en consola', errores.length === 0, errores.slice(0, 3).join(' | '));
 
   console.log(fallos ? `\n${fallos} comprobación(es) fallida(s)\n` : '\nTodo correcto\n');

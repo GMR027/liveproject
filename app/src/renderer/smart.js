@@ -3,6 +3,7 @@
 
 /* ======== funciones que se ejecutan DENTRO de la página (sin dependencias externas) ======== */
 function pageAnalyze() {
+  if (!document.body) return null;
   const SKIP = new Set(['SCRIPT', 'STYLE', 'LINK', 'META', 'NOSCRIPT', 'TEMPLATE', 'HEAD', 'BR']);
   const vw = window.innerWidth;
   const pathOf = (el) => {
@@ -14,14 +15,19 @@ function pageAnalyze() {
     }
     return 'body > ' + parts.join(' > ');
   };
-  const cls = (el) => (typeof el.className === 'string' ? el.className.trim().split(/\s+/).filter(Boolean).slice(0, 3).join('.') : '');
-  let budget = 1500;
+  // Las clases se leen del atributo: funciona igual en HTML y en SVG (SVGAnimatedString).
+  const listCls = (el) => {
+    const raw = el.getAttribute ? el.getAttribute('class') : '';
+    return raw ? raw.trim().split(/\s+/).filter(Boolean) : [];
+  };
+  let budget = 2200;
   const build = (el, depth) => {
     const r = el.getBoundingClientRect();
     let txt = '';
     for (const c of el.childNodes) if (c.nodeType === 3 && c.textContent.trim()) { txt = c.textContent.trim().slice(0, 32); break; }
-    const node = { t: el.tagName.toLowerCase(), id: el.id || '', c: cls(el), p: pathOf(el), w: Math.round(r.width), h: Math.round(r.height), txt, n: 0, ch: [] };
-    if (depth < 16) {
+    const css = listCls(el);
+    const node = { t: el.tagName.toLowerCase(), id: el.id || '', c: css.slice(0, 3).join('.'), cc: css.length, p: pathOf(el), w: Math.round(r.width), h: Math.round(r.height), txt, n: 0, ch: [] };
+    if (depth < 24) {
       for (const child of el.children) {
         if (SKIP.has(child.tagName)) continue;
         if (budget-- <= 0) break;
@@ -162,15 +168,60 @@ function pageDescribe(path) {
   const borders = ['Top', 'Right', 'Bottom', 'Left'].map((s) => px(cs['border' + s + 'Width']));
   const props = ['display', 'position', 'width', 'height', 'font-family', 'font-size', 'font-weight', 'line-height', 'color', 'background-color',
     'z-index', 'overflow', 'flex-direction', 'justify-content', 'align-items', 'grid-template-columns', 'gap', 'opacity', 'cursor'];
+  const pathOf = (n) => {
+    if (n === document.documentElement) return 'html';
+    if (n === document.body) return 'body';
+    const parts = [];
+    for (let x = n; x && x !== document.body && x.nodeType === 1; x = x.parentElement) {
+      parts.unshift(`${x.tagName.toLowerCase()}:nth-child(${Array.prototype.indexOf.call(x.parentElement.children, x) + 1})`);
+    }
+    return 'body > ' + parts.join(' > ');
+  };
+  const listCls = (n) => {
+    const raw = n.getAttribute ? n.getAttribute('class') : '';
+    return raw ? raw.trim().split(/\s+/).filter(Boolean) : [];
+  };
+  const textOf = (n) => {
+    for (const c of n.childNodes) if (c.nodeType === 3 && c.textContent.trim()) return c.textContent.trim().slice(0, 48);
+    return '';
+  };
+  // Ruta de ancestros, para saber dónde está el componente dentro de la página.
+  const ancestors = [];
+  for (let n = el.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+    const cls = listCls(n);
+    ancestors.unshift({ path: pathOf(n), label: `${n.tagName.toLowerCase()}${n.id ? '#' + n.id : ''}${cls.length ? '.' + cls.slice(0, 2).join('.') : ''}` });
+  }
+  if (el !== document.documentElement) ancestors.unshift({ path: 'html', label: 'html' });
+  // Subárbol del elemento seleccionado: su estructura real (hijos, nietos…), con sus clases.
+  const budget = { n: 120 };
+  const subtree = (node, depth) => {
+    const out = [];
+    for (const child of node.children) {
+      if (budget.n-- <= 0 || out.length >= 50) break;
+      const cls = listCls(child);
+      out.push({
+        tag: child.tagName.toLowerCase(), id: child.id || '', classes: cls, path: pathOf(child), text: textOf(child),
+        children: depth < 3 ? subtree(child, depth + 1) : []
+      });
+    }
+    return out;
+  };
+  const classes = listCls(el);
+  const selector = el.id
+    ? `#${CSS.escape(el.id)}`
+    : `${el.tagName.toLowerCase()}${classes.map((c) => `.${CSS.escape(c)}`).join('')}`;
+  const html = el.outerHTML || '';
   return {
-    tag: el.tagName.toLowerCase(), id: el.id, classes: typeof el.className === 'string' ? el.className.trim().split(/\s+/).filter(Boolean) : [],
+    tag: el.tagName.toLowerCase(), id: el.id, classes, selector,
     rect: { x: Math.round(r.left + scrollX), y: Math.round(r.top + scrollY), w: Math.round(r.width * 100) / 100, h: Math.round(r.height * 100) / 100 },
     margin: box('margin'), padding: box('padding'), border: borders,
     content: { w: Math.round((r.width - px(cs.paddingLeft) - px(cs.paddingRight) - borders[1] - borders[3]) * 10) / 10, h: Math.round((r.height - px(cs.paddingTop) - px(cs.paddingBottom) - borders[0] - borders[2]) * 10) / 10 },
     styles: props.map((p) => [p, cs.getPropertyValue(p)]).filter(([, v]) => v && v !== 'auto' && v !== 'normal' && v !== 'none'),
-    attrs: Array.from(el.attributes).slice(0, 12).map((a) => [a.name, a.value.slice(0, 80)]),
+    attrs: Array.from(el.attributes).slice(0, 20).map((a) => [a.name, a.value.slice(0, 160)]),
     role: el.getAttribute('role') || '', name: el.getAttribute('aria-label') || el.getAttribute('alt') || '',
-    snippet: el.outerHTML.slice(0, 220)
+    ancestors, subtree: subtree(el, 0), shadow: !!el.shadowRoot, childCount: el.children.length,
+    html: html.slice(0, 6000), htmlTruncated: html.length > 6000,
+    snippet: html.slice(0, 220)
   };
 }
 
@@ -205,18 +256,36 @@ function pagePick() {
       }
       return 'body > ' + parts.join(' > ');
     };
+    // Si se pulsa dentro de un shadow DOM se selecciona el componente anfitrión (su ruta es representable).
+    const targetOf = (e) => {
+      let t = e.composedPath ? e.composedPath()[0] : e.target;
+      while (t && t.nodeType !== 1) t = t.parentElement;
+      if (t && t.getRootNode && t.getRootNode().host) t = t.getRootNode().host;
+      return t;
+    };
+    const labelOf = (el) => {
+      const cls = (el.getAttribute('class') || '').trim().split(/\s+/).filter(Boolean);
+      return `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${cls.length ? '.' + cls.slice(0, 2).join('.') : ''}`;
+    };
     const box = document.createElement('div');
-    box.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;background:rgba(111,168,220,.45);outline:2px solid #6c8cff;';
+    box.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;background:rgba(111,168,220,.22);outline:2px solid #6c8cff;';
+    const tag = document.createElement('span');
+    tag.style.cssText = 'position:absolute;left:0;top:0;transform:translateY(-100%);background:#6c8cff;color:#fff;font:11px/1.6 ui-monospace,monospace;padding:0 6px;border-radius:3px 3px 3px 0;white-space:nowrap;';
+    box.appendChild(tag);
     document.documentElement.appendChild(box);
     const done = (v) => {
       document.removeEventListener('mousemove', move, true); document.removeEventListener('click', click, true);
       document.removeEventListener('keydown', key, true); box.remove(); window.__lpCancel = null; resolve(v);
     };
     const move = (e) => {
-      const r = e.target.getBoundingClientRect();
+      const el = targetOf(e);
+      if (!el) return;
+      const r = el.getBoundingClientRect();
       box.style.left = r.left + 'px'; box.style.top = r.top + 'px'; box.style.width = r.width + 'px'; box.style.height = r.height + 'px';
+      tag.textContent = labelOf(el);
+      tag.style.top = r.top < 18 ? '100%' : '0';
     };
-    const click = (e) => { e.preventDefault(); e.stopPropagation(); done(pathOf(e.target)); };
+    const click = (e) => { e.preventDefault(); e.stopPropagation(); const el = targetOf(e); done(el ? pathOf(el) : null); };
     const key = (e) => { if (e.key === 'Escape') done(null); };
     window.__lpCancel = () => done(null);
     document.addEventListener('mousemove', move, true);
@@ -275,9 +344,13 @@ const Smart = (() => {
       const tog = el('span', 'tog', row, n.ch.length ? (collapsed.has(n.p) ? '▸' : '▾') : '·');
       const tag = el('span', 'tag', row, n.t);
       tag.style.background = colorOf(n.t);
-      let label = n.id ? `#${n.id}` : n.c ? `.${n.c}` : '';
+      // El id y las clases se muestran siempre (antes el id ocultaba las clases).
+      let label = n.id ? `#${n.id}` : '';
+      if (n.c) label += `.${n.c}`;
+      if (n.cc > 3) label += ` +${n.cc - 3}`;
       if (n.txt && !label && n.t !== 'body' && n.t !== 'html') label = `“${n.txt}”`;
-      el('span', 'tl', row, label);
+      const nameEl = el('span', 'tl', row, label);
+      nameEl.title = [n.id ? `#${n.id}` : '', n.c ? `.${n.c}` : '', n.cc > 3 ? `y ${n.cc - 3} clases más` : ''].filter(Boolean).join(' ');
       if (n.n) el('span', 'cnt', row, String(n.n));
       const bar = el('span', 'bar', row);
       const fill = el('i', n.w > vw + 1 ? 'over' : '', bar);
@@ -298,20 +371,89 @@ const Smart = (() => {
     walk(data.tree, 0);
   }
 
-  /* ---- detalle: modelo de caja ---- */
+  const revealSelected = () => {
+    if (!selected || !root.tree) return;
+    const row = [...root.tree.querySelectorAll('.tn')].find((r) => r.dataset.path === selected);
+    if (row) requestAnimationFrame(() => { try { row.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch { /* sin scroll */ } });
+  };
+
+  const copyText = async (text, what) => {
+    try { await navigator.clipboard.writeText(text); toast(`${what} copiado`); }
+    catch { toast('No se pudo copiar al portapapeles'); }
+  };
+
+  /* ---- detalle: clases, estructura, modelo de caja y estilos ---- */
   async function select(path, scroll) {
     selected = path;
+    // Al elegir un componente se despliega su estructura en el árbol y se deja a la vista.
+    if (collapsed.delete(path)) renderTree();
     root.tree.querySelectorAll('.tn').forEach((r) => r.classList.toggle('sel', r.dataset.path === path));
+    revealSelected();
     hl(path, scroll);
     const d = await run(pageDescribe, path);
     const box = root.detail;
     box.textContent = '';
-    if (!d) { el('div', 'hint', box, 'El elemento ya no existe.'); return; }
+    if (!d) { el('div', 'hint', box, 'El elemento ya no existe (la página pudo cambiar). Vuelve a analizarla.'); return; }
     const head = el('div', 'dhead', box);
     const tag = el('span', 'tag', head, d.tag); tag.style.background = colorOf(d.tag);
-    el('span', '', head, `${d.id ? '#' + d.id : ''}${d.classes.map((c) => '.' + c).join('')}`);
-    el('div', 'muted', box, `${d.rect.w} × ${d.rect.h} px · posición (${d.rect.x}, ${d.rect.y})`);
+    if (d.id) el('span', 'id-chip', head, `#${d.id}`);
+    const copySel = el('button', 'copy', head, '⧉ Selector');
+    copySel.type = 'button';
+    copySel.title = `Copiar el selector (${d.selector})`;
+    copySel.onclick = () => copyText(d.selector, 'Selector');
+    el('div', 'muted', box, `${d.rect.w} × ${d.rect.h} px · posición (${d.rect.x}, ${d.rect.y})${d.shadow ? ' · shadow DOM' : ''}`);
 
+    // Clases: siempre visibles y completas, para poder copiarlas o buscarlas en el CSS.
+    el('h5', '', box, `Clases (${d.classes.length})`);
+    const clsBox = el('div', 'classbox', box);
+    if (!d.classes.length) el('span', 'muted', clsBox, 'Este elemento no tiene clases.');
+    for (const c of d.classes) {
+      const chip = el('span', 'cls-chip', clsBox, `.${c}`);
+      chip.title = `Copiar .${c}`;
+      chip.onclick = () => copyText(c, 'Clase');
+    }
+
+    if (d.ancestors && d.ancestors.length) {
+      el('h5', '', box, 'Ruta');
+      const crumbs = el('div', 'crumbs', box);
+      d.ancestors.forEach((a, i) => {
+        if (i) el('span', 'crumb sep', crumbs, '›');
+        const b = el('button', 'crumb', crumbs, a.label);
+        b.type = 'button';
+        b.title = `Seleccionar ${a.label}`;
+        b.onclick = () => select(a.path, true);
+      });
+    }
+
+    // Estructura del componente: sus hijos y nietos, con sus clases.
+    el('h5', '', box, `Estructura (${d.childCount} ${d.childCount === 1 ? 'hijo directo' : 'hijos directos'})`);
+    if (!d.subtree || !d.subtree.length) {
+      el('div', 'muted', box, 'Sin elementos hijos.');
+    } else {
+      const tree = el('div', 'struct', box);
+      const walkStruct = (nodes, depth) => {
+        for (const s of nodes) {
+          const r = el('div', 'snode', tree);
+          r.style.paddingLeft = `${6 + depth * 14}px`;
+          const t = el('span', 'tag', r, s.tag); t.style.background = colorOf(s.tag);
+          if (s.id) el('span', 'id-chip', r, `#${s.id}`);
+          if (s.classes.length) {
+            const cc = el('span', 'scls', r, `.${s.classes.slice(0, 4).join('.')}${s.classes.length > 4 ? ` +${s.classes.length - 4}` : ''}`);
+            cc.title = s.classes.join(' ');
+          }
+          if (s.text) el('span', 'stxt', r, `“${s.text}”`);
+          if (s.children.length) el('span', 'scount', r, String(s.children.length));
+          r.title = `Seleccionar ${s.tag}${s.classes.length ? '.' + s.classes.join('.') : ''}`;
+          r.onclick = () => select(s.path, true);
+          r.onmouseenter = () => hl(s.path);
+          r.onmouseleave = () => hl(path);
+          if (s.children.length) walkStruct(s.children, depth + 1);
+        }
+      };
+      walkStruct(d.subtree, 0);
+    }
+
+    // Modelo de caja
     const bm = el('div', 'boxmodel', box);
     const layer = (cls, name, vals, inner) => {
       const l = el('div', `bm ${cls}`, null);
@@ -335,7 +477,11 @@ const Smart = (() => {
       for (const [k, v] of d.attrs) { const tr = el('tr', '', t); el('td', 'k', tr, k); el('td', '', tr, v); }
     }
     el('h5', '', box, 'HTML');
-    el('pre', 'snippet', box, d.snippet);
+    const pre = el('pre', 'snippet', box, d.html || d.snippet);
+    if (d.htmlTruncated) el('div', 'muted', box, 'HTML recortado a 6000 caracteres.');
+    const copyHtml = el('button', 'copy', box, '⧉ Copiar HTML');
+    copyHtml.type = 'button';
+    copyHtml.onclick = () => copyText(d.html || d.snippet, 'HTML');
   }
 
   /* ---- resumen ---- */
@@ -424,15 +570,23 @@ const Smart = (() => {
     if (!v) return;
     if (picking) { run(() => window.__lpCancel && window.__lpCancel()); return; }
     picking = true; root.pick.classList.add('active');
+    const prevStatus = root.status.textContent;
+    root.status.textContent = 'Haz clic en un elemento de la vista… (Esc para cancelar)';
     const path = await run(pagePick);
     picking = false; root.pick.classList.remove('active');
     if (path) {
       if (!data) await analyze();
-      // expandir ancestros en el árbol
+      // expandir los ancestros y el propio componente para que se vea su estructura
       const parts = path.split(' > ');
       for (let i = 1; i < parts.length; i++) collapsed.delete(parts.slice(0, i).join(' > '));
+      collapsed.delete(path);
       renderTree();
-      select(path, false);
+      await select(path, false);
+      root.status.textContent = `Seleccionado en ${deviceName()}`;
+    } else {
+      root.status.textContent = 'Selección cancelada';
+      clearTimeout(pick.restore);
+      pick.restore = setTimeout(() => { if (!picking) root.status.textContent = prevStatus; }, 2500);
     }
   }
 
@@ -444,5 +598,5 @@ const Smart = (() => {
     renderTree();
   }
 
-  return { init, analyze, reset() { data = null; selected = null; root.init = false; collapsed.clear(); renderTree(); renderSummary(); }, setAi: (v) => { aiOn = v; } };
+  return { init, analyze, reset() { data = null; selected = null; root.init = false; collapsed.clear(); if (root.detail) root.detail.innerHTML = '<div class="hint">Selecciona un elemento del árbol o usa «Elegir en la página».</div>'; renderTree(); renderSummary(); }, setAi: (v) => { aiOn = v; } };
 })();
