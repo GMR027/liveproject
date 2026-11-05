@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Interacciones · LiveProject</title>
+  <style>
+    :root { color-scheme: light dark; font-family: system-ui, sans-serif; }
+    body { max-width: 760px; margin: 40px auto; padding: 0 20px; line-height: 1.55; }
+    h1 { margin-bottom: 4px; }
+    .lead { color: #667; margin-top: 0; }
+    .demo { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; margin: 24px 0; }
+    .hola {
+      padding: 20px 26px; border-radius: 12px; border: 2px solid #8892b0;
+      background: #f4f6fb; color: #1f2433; font-weight: 600; transition: all .25s;
+    }
+    .hola.saludo {
+      border-color: #2f9e6e; background: #d9f7e9; color: #145c3a;
+      transform: translateY(-2px) scale(1.02); box-shadow: 0 10px 24px rgba(47, 158, 110, .22);
+    }
+    button { padding: 9px 16px; border-radius: 8px; border: 1px solid #8892b0; background: #fff; cursor: pointer; }
+    .panel { margin-top: 20px; padding: 14px; border: 1px solid #d7dbe7; border-radius: 10px; background: #fbfcff; }
+    .toast { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: #1f2433; color: #fff; }
+  </style>
+</head>
+<body>
+  <h1>Demo de interacciones</h1>
+  <p class="lead">Abre <b>🔀 Interacciones</b>, pulsa «Grabar» y haz clic en el botón. Verás la clase <code>saludo</code>, el texto y el nodo del aviso aparecer en el registro.</p>
+
+  <div class="demo">
+    <div id="card" class="hola">Hola</div>
+    <button id="toggle" type="button">Añadir / quitar la clase saludo</button>
+    <button id="notify" type="button">Mostrar un aviso temporal</button>
+    <button id="change-text" type="button">Cambiar el texto</button>
+  </div>
+
+  <div class="panel">
+    <b>Qué observar:</b>
+    <ul>
+      <li>clase añadida o eliminada en <code>div#card</code>;</li>
+      <li>texto del título y del propio div;</li>
+      <li>nodo <code>div.toast</code> añadido y eliminado después de 2 segundos.</li>
+    </ul>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

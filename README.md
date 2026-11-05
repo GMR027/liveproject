@@ -28,6 +28,14 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
   resumen, problemas de accesibilidad/responsive/contraste, paleta y encabezados. Pasa el ratón por un elemento para resaltarlo en la página.
   Al elegir un componente (en el árbol o con *Elegir en la página*) se muestran **todas sus clases**, su ruta de ancestros, su
   **estructura** (hijos y nietos con sus clases) y el HTML completo; el árbol se despliega y se desplaza hasta el elemento elegido.
+- **Interacciones** (🔀): graba lo que cambia el DOM al hacer clic, escribir o enviar un formulario: clases añadidas o quitadas,
+  atributos, estilos calculados, textos y nodos creados o eliminados. Cada interacción muestra el **antes/después** del código,
+  el selector afectado y botones para resaltarlo o abrirlo en el Inspector. Incluye filtro, exportación a JSON en
+  `.liveproject/interactions/` y un modo **continuo** para capturar cambios asíncronos (por ejemplo, un aviso que se quita solo a los 2 segundos).
+  Con **origen del código** muestra qué listener respondió, qué API del DOM hizo el cambio (`classList.toggle`, `setAttribute`…)
+  y qué regla CSS define la clase; resuelve **source maps** y abre el fichero original en el editor. El botón **🎯** de cada
+  cambio prepara un breakpoint DOM por CDP para precisar la pila exacta: se pulsa, se repite la interacción y se captura el origen real
+  (requiere que las DevTools reales estén cerradas).
 - **DevTools**: las DevTools reales de Chromium (Elements, Console, Sources, Network…) del dispositivo elegido.
   Con **⇱ Derecha** se acoplan al panel lateral derecho en un área más ancha (y ajustable con el separador), y al cambiar a otra pestaña
   lateral se ocultan sin perder el elemento inspeccionado ni el historial de la consola. El botón **⇄ Dispositivo** pasa al siguiente dispositivo.
@@ -72,6 +80,7 @@ Capturas, sesiones e informes en `<proyecto>/.liveproject/` (añádelo a tu `.gi
 
     cd app && npm test           # prueba de humo (carga la interfaz y comprueba lo esencial)
     cd app && npm run test:mirror  # prueba del espejo (sesión, formularios y navegación en las 3 vistas y en el túnel)
+    cd app && npm run test:interactions  # clic real, diff de clases, origen JS/CSS, source maps y breakpoint CDP
 
 ## Licencia
 

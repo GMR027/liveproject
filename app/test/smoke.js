@@ -20,7 +20,7 @@ app.whenReady().then(async () => {
     }
   });
   const errores = [];
-  win.webContents.on('console-message', (_e, lvl, msg) => { if (lvl >= 2) errores.push(msg); });
+  win.webContents.on('console-message', (_e, lvl, msg) => { if (lvl >= 2) { errores.push(msg); console.log(`  · app: ${msg}`); } });
   await win.loadFile(SRC);
   await new Promise((r) => setTimeout(r, 1500));
 
@@ -44,7 +44,10 @@ app.whenReady().then(async () => {
   // 1. La interfaz carga
   check('el renderer se carga', await js(`!!document.getElementById('stage')`));
   check('la interfaz termina de inicializarse', await waitFor(`!!$('btn-dock').onclick`));
-  check('las pestañas de herramientas existen', (await js(`document.querySelectorAll('#bottom-bar .tab').length`)) === 6);
+  check('las pestañas de herramientas existen', (await js(`document.querySelectorAll('#bottom-bar .tab').length`)) === 7);
+  check('la pestaña de interacciones existe', await js(`!!document.getElementById('tab-changes') && !!document.getElementById('int-list')`));
+  check('la pestaña activa la grabación', await js(`(setTab('changes'), Interactions.isRecording())`));
+  await js(`setTab('smart');`);
 
   // 1b. La barra de direcciones admite páginas completas (con ruta y parámetros)
   check('la dirección acepta una página completa', await js(`addressUrl('https://projectweb.iguzman.com.mx/programa?proyecto=10') === 'https://projectweb.iguzman.com.mx/programa?proyecto=10'`));
@@ -109,6 +112,21 @@ app.whenReady().then(async () => {
   check('el árbol conserva las clases', !!sm && sm.c.includes('.'));
   check('el detalle muestra todas las clases', !!sm && sm.desc.classes.length > 0 && sm.desc.selector.includes('.'));
   check('el detalle muestra la ruta y la estructura', !!sm && sm.desc.ancestors.length > 0 && Array.isArray(sm.desc.subtree));
+
+  // 9b. Registro de interacciones: se renderiza el antes/después de una clase
+  const intOk = await js(`(() => {
+    Interactions.setView('smoke-dev');
+    Interactions.onBatch('smoke-dev', {
+      id: 'smoke-1', at: Date.now(), url: 'http://localhost/', durationMs: 12, event: { type: 'click', label: 'div.hola', selector: 'body > div:nth-child(1)' },
+      changes: [{ kind: 'attribute', attr: 'class', selector: 'body > div:nth-child(1)', label: 'div.hola', oldValue: 'hola', newValue: 'hola saludo', added: ['saludo'], removed: [] }],
+      html: { before: '<div class="hola">Hola</div>', after: '<div class="hola saludo">Hola</div>', removed: false, truncated: false }, styles: []
+    });
+    const item = document.querySelector('.int-item');
+    if (item) item.click();
+    return !!item && !!document.querySelector('.int-chg') && document.querySelector('.int-chg-title').textContent.includes('saludo');
+  })()`);
+  check('el registro de interacciones muestra el cambio de clase', intOk);
+  await js(`Interactions.setView(inspectId)`);
 
   // 10. DevTools acopladas a la derecha: panel más ancho y botón de acople en su barra
   check('la barra de DevTools tiene su botón de acople', await js(`!!document.getElementById('dt-dock')`));

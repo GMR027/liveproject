@@ -233,6 +233,7 @@ function pageHighlight(path) {
   if (!o) {
     o = document.createElement('div');
     o.id = '__lp_overlay';
+    o.setAttribute('data-lp-ui', '1');
     o.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483647;left:0;top:0;';
     o.innerHTML = '<div data-k="m" style="position:absolute;background:rgba(246,178,107,.45)"></div><div data-k="b" style="position:absolute;background:rgba(111,168,220,.55);outline:1px solid #2b6cb0"></div>';
     document.documentElement.appendChild(o);
@@ -268,8 +269,10 @@ function pagePick() {
       return `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${cls.length ? '.' + cls.slice(0, 2).join('.') : ''}`;
     };
     const box = document.createElement('div');
+    box.setAttribute('data-lp-ui', '1');
     box.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;background:rgba(111,168,220,.22);outline:2px solid #6c8cff;';
     const tag = document.createElement('span');
+    tag.setAttribute('data-lp-ui', '1');
     tag.style.cssText = 'position:absolute;left:0;top:0;transform:translateY(-100%);background:#6c8cff;color:#fff;font:11px/1.6 ui-monospace,monospace;padding:0 6px;border-radius:3px 3px 3px 0;white-space:nowrap;';
     box.appendChild(tag);
     document.documentElement.appendChild(box);
@@ -598,5 +601,5 @@ const Smart = (() => {
     renderTree();
   }
 
-  return { init, analyze, reset() { data = null; selected = null; root.init = false; collapsed.clear(); if (root.detail) root.detail.innerHTML = '<div class="hint">Selecciona un elemento del árbol o usa «Elegir en la página».</div>'; renderTree(); renderSummary(); }, setAi: (v) => { aiOn = v; } };
+  return { init, analyze, select: (path) => select(path, true), reset() { data = null; selected = null; root.init = false; collapsed.clear(); if (root.detail) root.detail.innerHTML = '<div class="hint">Selecciona un elemento del árbol o usa «Elegir en la página».</div>'; renderTree(); renderSummary(); }, setAi: (v) => { aiOn = v; } };
 })();

@@ -357,17 +357,198 @@ ipcMain.handle('editor:open', (_e, { file, line }) => {
   return openInEditor(abs, line);
 });
 // Abre en el editor el fichero del proyecto que corresponde a una URL de la vista.
-ipcMain.handle('editor:open-url', (_e, { url }) => {
+ipcMain.handle('editor:open-url', (_e, { url, line }) => {
   if (!cfg || !cfg.root) return { ok: false, message: 'Abre un proyecto primero' };
   let p;
   try { p = decodeURIComponent(new URL(url).pathname); } catch { return { ok: false, message: 'URL no válida' }; }
   if (!p || p === '/') p = '/index.html';
   const cands = [path.join(cfg.root, p), path.join(cfg.root, p, 'index.html'), path.join(cfg.root, `${p}.html`), path.join(cfg.root, 'public', p)];
   for (const c of cands) {
-    try { if (fs.existsSync(c) && fs.statSync(c).isFile()) return openInEditor(c, 0); } catch { /* siguiente */ }
+    try { if (fs.existsSync(c) && fs.statSync(c).isFile()) return openInEditor(c, line || 0); } catch { /* siguiente */ }
   }
   return { ok: false, message: 'Esa página no corresponde a un fichero del proyecto (URL reescrita por el servidor)' };
 });
+
+// ---------- origen del código: source maps y CSS ----------
+const sourceMapCache = new Map();
+
+async function readTextUrl(raw) {
+  try {
+    const u = new URL(String(raw));
+    if (u.protocol === 'file:') return fs.promises.readFile(decodeURIComponent(u.pathname), 'utf8');
+    const res = await fetch(u.href, { redirect: 'follow' });
+    if (!res.ok) return '';
+    return await res.text();
+  } catch { return ''; }
+}
+
+function localSourceFile(source) {
+  if (!cfg || !cfg.root) return '';
+  let s = String(source || '').split('?')[0].split('#')[0];
+  try { if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) s = decodeURIComponent(new URL(s).pathname); } catch { /* ruta relativa */ }
+  s = s.replace(/^webpack:\/\/[^/]*\//i, '').replace(/^vite:\/\//i, '').replace(/^file:\/\//i, '').replace(/^\.?\//, '');
+  const root = cfg.root;
+  const cands = [path.join(root, s)];
+  for (const seg of ['src/', 'app/', 'resources/', 'frontend/']) {
+    const i = s.indexOf(seg);
+    if (i > 0) cands.push(path.join(root, s.slice(i)));
+  }
+  cands.push(path.join(root, path.basename(s)));
+  for (const c of cands) {
+    try {
+      if (c.startsWith(root) && fs.existsSync(c) && fs.statSync(c).isFile()) return c;
+    } catch { /* siguiente */ }
+  }
+  return '';
+}
+
+async function resolveOrigin(url, line, column) {
+  const js = await readTextUrl(url);
+  if (!js) return { ok: false, error: 'No se pudo leer el script' };
+  const re = /(?:\/\/[#@]\s*sourceMappingURL=([^\s'"]+)|\/\*[#@]\s*sourceMappingURL=([^*]+?)\s*\*\/)/g;
+  let m;
+  let mapRef = '';
+  while ((m = re.exec(js))) mapRef = (m[1] || m[2] || '').trim();
+  if (!mapRef) return { ok: false, error: 'El script no tiene source map' };
+  let mapUrl;
+  try { mapUrl = new URL(mapRef, url).href; } catch { return { ok: false, error: 'sourceMappingURL inválida' }; }
+  let raw = sourceMapCache.get(mapUrl);
+  if (raw === undefined) {
+    if (mapUrl.startsWith('data:')) {
+      const b64 = mapUrl.includes(';base64,') ? mapUrl.split(';base64,')[1] : '';
+      try { raw = Buffer.from(b64, 'base64').toString('utf8'); } catch { raw = ''; }
+    } else {
+      raw = await readTextUrl(mapUrl);
+    }
+    if (sourceMapCache.size > 30) sourceMapCache.clear();
+    sourceMapCache.set(mapUrl, raw);
+  }
+  if (!raw) return { ok: false, error: 'No se pudo leer el source map' };
+  try {
+    const { SourceMapConsumer } = require('source-map');
+    const consumer = new SourceMapConsumer(JSON.parse(raw));
+    const pos = consumer.originalPositionFor({ line: Math.max(1, line || 1), column: Math.max(0, (column || 1) - 1) });
+    if (consumer.destroy) consumer.destroy();
+    if (!pos || !pos.source) return { ok: false, error: 'Sin posición original' };
+    return {
+      ok: true, source: pos.source, name: pos.name || '', line: pos.line || 0, column: (pos.column || 0) + 1,
+      file: localSourceFile(pos.source), map: mapUrl
+    };
+  } catch (e) {
+    return { ok: false, error: `Source map inválido: ${e.message}` };
+  }
+}
+
+ipcMain.handle('origin:resolve', (_e, { url, line, column }) => resolveOrigin(String(url || ''), Number(line) || 1, Number(column) || 1));
+
+function resolveUrlFile(url) {
+  if (!cfg || !cfg.root) return { file: '', p: '' };
+  let p;
+  try { p = decodeURIComponent(new URL(url).pathname); } catch { return { file: '', p: '' }; }
+  if (!p || p === '/') p = '/index.html';
+  const cands = [path.join(cfg.root, p), path.join(cfg.root, 'public', p), path.join(cfg.root, p, 'index.html')];
+  for (const c of cands) {
+    try { if (fs.existsSync(c) && fs.statSync(c).isFile()) return { file: c, p }; } catch { /* siguiente */ }
+  }
+  return { file: '', p };
+}
+
+ipcMain.handle('origin:css', (_e, { url, selector }) => {
+  const { file } = resolveUrlFile(String(url || ''));
+  if (!file) return { ok: false, error: 'No se encuentra la hoja de estilos' };
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    const needle = String(selector || '').trim();
+    const i = text.indexOf(needle);
+    return { ok: true, file, line: i >= 0 ? text.slice(0, i).split('\n').length : 0 };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+// ---------- CDP: precisar el origen de un cambio con breakpoint DOM ----------
+const originWatches = new Map();
+async function cdpWatch(targetId, selector, kind) {
+  const wc = webContents.fromId(Number(targetId));
+  if (!wc || wc.isDestroyed()) return { ok: false, error: 'La vista no está disponible' };
+  if (wc.isDevToolsOpened()) return { ok: false, error: 'Cierra las DevTools para precisar el origen con CDP' };
+  const dbg = wc.debugger;
+  const key = Number(targetId);
+  const previous = originWatches.get(key);
+  if (previous) await previous.cleanup('replace');
+  let attachedHere = false;
+  try {
+    if (!dbg.isAttached()) { dbg.attach('1.3'); attachedHere = true; }
+  } catch (e) {
+    return { ok: false, error: `No se pudo adjuntar el depurador: ${e.message}` };
+  }
+
+  const scriptUrls = new Map();
+  let nodeId = 0;
+  let breakpointType = '';
+  let timer = null;
+  let onMessage = null;
+  let done = false;
+  const cleanup = async (notify) => {
+    if (done) return;
+    done = true;
+    originWatches.delete(key);
+    clearTimeout(timer);
+    if (onMessage) { try { dbg.removeListener('message', onMessage); } catch { /* sin listener */ } }
+    if (nodeId) { try { await dbg.sendCommand('DOMDebugger.removeDOMBreakpoint', { nodeId, type: breakpointType }); } catch { /* ya no existe */ } }
+    if (notify) send('origin:cdp', { targetId: key, selector, kind, error: notify });
+    if (attachedHere) { try { dbg.detach(); } catch { /* ya desconectado */ } }
+  };
+
+  onMessage = async (_event, method, params) => {
+    if (method === 'Debugger.scriptParsed' && params) {
+      if (params.scriptId) scriptUrls.set(params.scriptId, params.url || '');
+      return;
+    }
+    if (method !== 'Debugger.paused') return;
+    if (params && params.reason && params.reason !== 'DOM') {
+      try { await dbg.sendCommand('Debugger.resume'); } catch { /* ya reanudado */ }
+      return;
+    }
+    const frames = (params.callFrames || []).slice(0, 12).map((f) => ({
+      functionName: f.functionName || '',
+      url: f.url || (f.location && scriptUrls.get(f.location.scriptId)) || '',
+      line: (f.location && f.location.lineNumber + 1) || 0,
+      column: (f.location && f.location.columnNumber + 1) || 0
+    }));
+    send('origin:cdp', { targetId: key, selector, kind, frames });
+    try { await dbg.sendCommand('Debugger.resume'); } catch { /* ya reanudado */ }
+    await cleanup('');
+  };
+  dbg.on('message', onMessage);
+
+  try {
+    await dbg.sendCommand('DOM.enable');
+    await dbg.sendCommand('Debugger.enable');
+    const doc = await dbg.sendCommand('DOM.getDocument', { depth: -1 });
+    const q = await dbg.sendCommand('DOM.querySelector', { nodeId: doc.root.nodeId, selector: String(selector || '') });
+    if (!q || !q.nodeId) {
+      await cleanup('');
+      return { ok: false, error: 'No se encontró el elemento en la página' };
+    }
+    nodeId = q.nodeId;
+    breakpointType = kind === 'childList' ? 'subtree-modified' : 'attribute-modified';
+    await dbg.sendCommand('DOMDebugger.setDOMBreakpoint', { nodeId, type: breakpointType });
+    timer = setTimeout(() => cleanup('timeout'), 20000);
+    originWatches.set(key, { onMessage, cleanup, timer, dbg, attachedHere });
+    return { ok: true, selector, kind };
+  } catch (e) {
+    await cleanup('');
+    return { ok: false, error: e.message };
+  }
+}
+ipcMain.handle('origin:cdp', (_e, { targetId, selector, kind }) => cdpWatch(targetId, selector, kind));
+ipcMain.handle('origin:cdp-cancel', (_e, { targetId }) => {
+  const w = originWatches.get(Number(targetId));
+  if (w) w.cleanup('cancel');
+  return true;
+});
+
 
 ipcMain.handle('links:check', (_e, urls) => checkLinks(urls.map(String), (done, total) => send('links:progress', { done, total })));
 ipcMain.handle('routes:scan', () => scanRoutes(cfg ? cfg.root : null, cfg ? cfg.ignore : null));
@@ -390,6 +571,14 @@ ipcMain.handle('report:save', (_e, { html, md }) => {
   fs.writeFileSync(`${base}.md`, md);
   shell.showItemInFolder(`${base}.html`);
   return { dir, html: `${base}.html`, md: `${base}.md` };
+});
+ipcMain.handle('interactions:save', (_e, data) => {
+  const dir = path.join(cfg ? cfg.root : app.getPath('documents'), '.liveproject', 'interactions');
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `interacciones-${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  shell.showItemInFolder(file);
+  return { dir, file };
 });
 const lanStatus = () => ({ ...lan.status(), target: cfg ? cfg.url : '' });
 ipcMain.handle('lan:start', async () => {

@@ -40,6 +40,7 @@
         <button type="button" class="menu-item" id="btn-shot" title="Capturar todas las vistas">📷 <span>Captura de todas las vistas</span></button>
         <button type="button" class="menu-item" id="btn-compare" title="Comparar la captura actual con la anterior y guardar la imagen de diferencias">🔍 <span>Comparar capturas</span></button>
         <button type="button" class="menu-item" id="btn-report" title="Exportar informe (HTML y Markdown)">📄 <span>Exportar informe</span></button>
+        <button type="button" class="menu-item" id="btn-interactions" title="Grabar los cambios del DOM que produce cada interacción">🔀 <span>Grabar interacciones</span></button>
       </div>
     </div>
     <button id="btn-lan" title="Abrir el proyecto en el móvil, la tableta u otro equipo de la red">📡 Red local <span id="lan-count" class="badge ok-badge" hidden></span></button>
@@ -71,7 +72,7 @@
         <button class="stab2" data-side="links">🔗 Enlaces <span id="links-badge" class="badge" hidden></span></button>
         <button class="stab2" data-side="routes">🧭 Rutas <span id="routes-badge" class="badge" hidden></span></button>
         <button class="stab2" data-side="history">🕘 Historial</button>
-        <button class="stab2" data-side="tools" title="Inspector inteligente, DevTools, CSS responsive y registro del servidor">🔧 Herramientas</button>
+        <button class="stab2" data-side="tools" title="Inspector inteligente, interacciones, DevTools, CSS responsive y registro del servidor">🔧 Herramientas</button>
       </div>
 
       <section id="side-messages" class="side-pane">
@@ -134,7 +135,7 @@
         <div id="hist-list" class="side-list"></div>
       </section>
 
-      <!-- Las herramientas (inspector inteligente, DevTools, CSS responsive y servidor)
+      <!-- Las herramientas (inspector inteligente, interacciones, DevTools, CSS responsive y servidor)
            se trasladan aquí desde el panel inferior con el botón «⇱ Derecha». -->
       <section id="side-tools" class="side-pane" hidden>
         <div id="tools-bar"></div>
@@ -147,6 +148,7 @@
   <section id="bottom">
     <div id="bottom-bar">
       <button class="tab active" data-tab="smart">✨ <span class="tl-long">Inspector inteligente</span><span class="tl-short">Inspector</span></button>
+      <button class="tab" data-tab="changes">🔀 <span class="tl-long">Interacciones</span><span class="tl-short">Cambios</span> <span id="int-badge" class="badge" hidden></span></button>
       <button class="tab" data-tab="devtools">DevTools</button>
       <button class="tab" data-tab="csslint">📐 <span class="tl-long">CSS responsive</span><span class="tl-short">CSS</span> <span id="csl-badge" class="badge" hidden></span></button>
       <button class="tab" data-tab="logs">Servidor</button>
@@ -170,6 +172,21 @@
         <div id="smart-tree"></div>
         <div id="smart-detail"><div class="hint">Selecciona un elemento del árbol o usa «Elegir en la página».</div></div>
         <div id="smart-summary"></div>
+      </div>
+    </div>
+    <div id="tab-changes" class="pane" hidden>
+      <div class="smart-bar int-bar">
+        <button id="int-record" class="primary" title="Grabar los cambios que produce cada interacción en la vista seleccionada">⏺ Grabar</button>
+        <button id="int-clear" title="Vaciar el historial de interacciones">Limpiar</button>
+        <label class="check" title="Sigue registrando los cambios asíncronos que llegan después del clic"><input type="checkbox" id="int-continuous"> Continua</label>
+        <label class="check" title="Desplazarse automáticamente al último cambio"><input type="checkbox" id="int-follow" checked> Seguir</label>
+        <input id="int-filter" type="text" placeholder="Filtrar cambios…" spellcheck="false">
+        <span id="int-status" class="muted"></span>
+        <button id="int-export" title="Exportar las interacciones como JSON">⤓ JSON</button>
+      </div>
+      <div class="int-cols">
+        <div id="int-list"></div>
+        <div id="int-detail"><div class="hint">Pulsa «Grabar» y haz clic en un elemento de la vista. Aquí verás qué clases, atributos, estilos, textos o nodos cambiaron y el código antes/después.</div></div>
       </div>
     </div>
     <div id="tab-inspector" class="pane" hidden>
@@ -354,7 +371,7 @@
               <li><b>Escenario</b>: el centro, donde viven los dispositivos. Si no caben, desplázate horizontalmente.</li>
               <li><b>Barra de rendimiento</b> (bajo el escenario): puntuación y métricas de carga por dispositivo. Plegable.</li>
               <li><b>🗂 Paneles</b> (derecha): Mensajes, Red, Enlaces, Rutas, Historial y Herramientas. Arrastra el separador para cambiar el ancho.</li>
-              <li><b>🔍 Inspector</b> (abajo): Inspector inteligente, DevTools, CSS responsive y registro del servidor. Arrastra el separador para cambiar la altura.</li>
+              <li><b>🔍 Inspector</b> (abajo): Inspector inteligente, Interacciones, DevTools, CSS responsive y registro del servidor. Arrastra el separador para cambiar la altura.</li>
               <li><b>⇱ Derecha</b>: traslada las herramientas al panel lateral derecho (pestaña <b>🔧 Herramientas</b>) para liberar espacio vertical; con <b>⇲ Abajo</b> vuelven al panel inferior. La posición se recuerda entre sesiones.</li>
               <li><b>⚙ Ajustes</b>: dispositivos, IA, tema, aplicación y este manual.</li>
             </ul>
@@ -443,12 +460,24 @@
             </ul>
           </details>
 
+          <details><summary>🔀 Interacciones</summary>
+            <ul>
+              <li>Pulsa <b>⏺ Grabar</b>, elige el dispositivo y haz clic, escribe o envía un formulario en la vista: cada interacción aparece en la lista con los cambios que provocó.</li>
+              <li>Se registran clases añadidas o quitadas, atributos, estilos calculados, textos y nodos creados o eliminados. Cada cambio muestra su selector y el <b>código antes/después</b>.</li>
+              <li>Pulsa un cambio para resaltarlo en la página, copiar su selector o abrirlo en el Inspector inteligente.</li>
+              <li><b>Continua</b> sigue capturando cambios asíncronos después del clic, por ejemplo un aviso que se elimina solo a los dos segundos. <b>⤓ JSON</b> guarda el historial en <code>.liveproject/interactions/</code>.</li>
+              <li><b>Origen</b>: muestra el listener que respondió, la API que cambió el DOM y la regla CSS que define la clase, con botón para abrir el fichero en el editor. Si el proyecto usa un bundle, resuelve el <b>source map</b> y lleva al archivo original.</li>
+              <li><b>🎯 CDP</b>: prepara un breakpoint DOM sobre el elemento; repite la interacción y se captura la pila exacta de JavaScript. Requiere cerrar las DevTools reales mientras se precisa el origen.</li>
+              <li>Las interacciones replicadas por el espejo no se duplican: solo se graba la vista donde se interactúa de verdad.</li>
+            </ul>
+          </details>
+
           <details><summary>🛠 DevTools y 📐 CSS responsive</summary>
             <ul>
               <li><b>DevTools</b>: las herramientas reales de Chromium (Elements, Console, Sources, Network…) acopladas al dispositivo elegido.</li>
               <li><b>CSS responsive</b>: pulsa <b>▶ Analizar dispositivos activos</b> y se revisa cada pantalla con su tamaño real: desbordes, anchos fijos, objetivos táctiles pequeños, tipografía, imágenes, <code>100vh</code>, media queries… Cada hallazgo propone una corrección y, al pulsarlo, resalta el elemento en la página.</li>
               <li>Con IA conectada aparecen <b>Corregir con IA</b> y <b>💡 Revisión con IA</b>, que prioriza los problemas y propone el CSS corregido.</li>
-              <li>Las cuatro herramientas (Inspector inteligente, DevTools, CSS responsive y Servidor) viven en el panel inferior. Con el botón <b>⇱ Derecha</b> pasan al panel lateral derecho, como la pestaña <b>🔧 Herramientas</b>, y el escenario gana espacio vertical; con <b>⇲ Abajo</b> regresan abajo. Las DevTools usan ahí un panel más ancho (ajustable con el separador) y conservan su estado al cambiar de pestaña lateral.</li>
+              <li>Las cinco herramientas (Inspector inteligente, Interacciones, DevTools, CSS responsive y Servidor) viven en el panel inferior. Con el botón <b>⇱ Derecha</b> pasan al panel lateral derecho, como la pestaña <b>🔧 Herramientas</b>, y el escenario gana espacio vertical; con <b>⇲ Abajo</b> regresan abajo. Las DevTools usan ahí un panel más ancho (ajustable con el separador) y conservan su estado al cambiar de pestaña lateral.</li>
             </ul>
           </details>
 
@@ -598,6 +627,7 @@
   <script src="report.js"></script>
   <script src="lanui.js"></script>
   <script src="smart.js"></script>
+  <script src="interactions.js"></script>
   <script src="perf.js"></script>
   <script src="mirror.js"></script>
   <script src="renderer.js"></script>

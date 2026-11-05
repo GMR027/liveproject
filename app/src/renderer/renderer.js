@@ -17,7 +17,7 @@ const rotated = new Set(); // ids de dispositivos girados a horizontal
 let netPending = [];   // peticiones de vistas que aún no han emitido dom-ready (no se conoce su webContents)
 let toolsDock = 'bottom'; // dónde viven las herramientas: 'bottom' (panel inferior) o 'side' (panel lateral derecho)
 
-const TOOL_PANES = ['tab-smart', 'tab-inspector', 'tab-csslint', 'tab-logs', 'tab-storage', 'tab-audit'];
+const TOOL_PANES = ['tab-smart', 'tab-changes', 'tab-inspector', 'tab-csslint', 'tab-logs', 'tab-storage', 'tab-audit'];
 
 const UA_MOBILE = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1';
 const TYPES = { phone: 'Teléfono', tablet: 'Tableta', laptop: 'Portátil', desktop: 'Monitor' };
@@ -218,6 +218,7 @@ function addFrame(device) {
       try { other.view.send('sync', { type: 'storage-get' }); } catch { /* sin adjuntar */ }
     }
     Emulate.onReady(f);
+    Interactions.onReady(device.id);
   });
   for (const ev of ['did-navigate', 'did-navigate-in-page', 'did-fail-load', 'did-finish-load']) f.view.addEventListener(ev, updateBack);
   f.view.addEventListener('did-navigate', (e) => {
@@ -259,6 +260,7 @@ function addFrame(device) {
   });
   f.view.addEventListener('ipc-message', (e) => {
     if (e.channel === 'console') { Messages.fromConsoleData(device.name, e.args[0]); return; }
+    if (e.channel === 'interact') { Interactions.onBatch(device.id, e.args[0]); return; }
     if (e.channel !== 'sync') return;
     Mirror.onSync(device.id, e.args[0]);   // clic, texto, scroll… se replican en las demás vistas y en el túnel
   });
@@ -376,6 +378,7 @@ function refreshTargets() {
   }
   if (!frames.has(inspectId)) inspectId = frames.size ? [...frames.keys()][0] : null;
   sel.value = inspectId || '';
+  if (typeof Interactions !== 'undefined') Interactions.setView(inspectId);
   if (!inspected) attachInspector();
   if (activeTab === 'smart' && sel.value !== refreshTargets.last) Smart.reset();
   refreshTargets.last = sel.value;
@@ -489,8 +492,9 @@ function switchInspector(id) {
   $('inspect-target').value = id;
   Perf.render();
   Smart.reset();
+  Interactions.setView(id);
   applySideWidth();
-  if (activeTab === 'smart') Smart.analyze(); else attachInspector();
+  if (activeTab === 'smart') Smart.analyze(); else if (activeTab === 'devtools') attachInspector();
 }
 
 function setTab(tab) {
@@ -498,12 +502,14 @@ function setTab(tab) {
   activeTab = tab;
   document.querySelectorAll('#bottom-bar .tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === tab));
   $('tab-smart').hidden = tab !== 'smart';
+  $('tab-changes').hidden = tab !== 'changes';
   $('tab-inspector').hidden = tab !== 'devtools';
   $('tab-csslint').hidden = tab !== 'csslint';
   $('tab-logs').hidden = tab !== 'logs';
   $('tab-storage').hidden = tab !== 'storage';
   $('tab-audit').hidden = tab !== 'audit';
   $('target-label').hidden = tab === 'logs' || tab === 'csslint';
+  if (tab === 'changes') Interactions.activate(); else Interactions.deactivate();
   if (toolsDock === 'side') {
     // Si las DevTools viven a la derecha, hay que asegurarse de que el panel y su pestaña estén visibles.
     if (tab === 'devtools') { if ($('messages').hidden) showSide(true); setSide('tools'); }
@@ -658,6 +664,7 @@ function initCommands() {
     { title: 'Explorar rutas del proyecto', run: () => { showSide(true); setSide('routes'); $('routes-run').click(); } },
     { title: 'Analizar CSS responsive', run: () => { dockTools('bottom'); setTab('csslint'); $('csl-run').click(); } },
     { title: 'Analizar la pagina (inspector inteligente)', run: () => { dockTools('bottom'); setTab('smart'); Smart.analyze(); } },
+    { title: 'Grabar interacciones y cambios del DOM', run: () => { dockTools('bottom'); setTab('changes'); Interactions.setRecording(true); } },
     { title: 'Abrir las DevTools', hint: 'F12', run: () => { dockTools('bottom'); setTab('devtools'); } },
     { title: 'Mover las herramientas de sitio', hint: 'Ctrl+Shift+D', run: () => dockTools(toolsDock === 'side' ? 'bottom' : 'side') },
     { title: 'Mostrar u ocultar el panel inferior', hint: 'Ctrl+B', run: () => togglePanel($('bottom').hidden) },
@@ -1421,6 +1428,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   window.liveproject.onReload(reloadAll);
   window.liveproject.onNetBatch(feedNet);
   window.liveproject.onNetNav(({ wc }) => Net.navigated(wc));
+  if (window.liveproject.onOriginCdp) window.liveproject.onOriginCdp((info) => Interactions.onCdp(info));
   window.liveproject.onLanError((e) => Messages.fromRemote(e));
   // Espejo con la red local: lo que hacen los dispositivos del túnel llega a las vistas y al revés.
   let sessionDirty = 0;
@@ -1508,6 +1516,23 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
     toast, openAi: openAiSettings, tree: $('smart-tree'), detail: $('smart-detail'), summary: $('smart-summary'),
     status: $('smart-status'), analyzeBtn: $('smart-analyze'), pickBtn: $('smart-pick')
   });
+  Interactions.init({
+    list: $('int-list'), detail: $('int-detail'), badge: $('int-badge'), record: $('int-record'),
+    clearBtn: $('int-clear'), continuous: $('int-continuous'), follow: $('int-follow'), filter: $('int-filter'),
+    status: $('int-status'), exportBtn: $('int-export'),
+    frameById: (id) => frames.get(id),
+    deviceNameOf: (id) => (frames.get(id) || { device: {} }).device.name || id,
+    targetIdOf: (id) => { const f = frames.get(id); return f ? f.wcId : null; },
+    toast,
+    highlight: (id, path) => {
+      const v = viewOf(id);
+      if (v) v.executeJavaScript(`(${pageHighlight.toString()})(${JSON.stringify(path || '')}, true)`).catch(() => {});
+    },
+    onSelect: (path) => {
+      setTab('smart');
+      setTimeout(() => Smart.select(path), 0);
+    }
+  });
   Messages.onChange(Sessions.touch);
   Net.init({
     list: $('net-list'), summary: $('net-summary'), badge: $('net-badge'), typeSel: $('net-type'), search: $('net-search'),
@@ -1563,6 +1588,7 @@ function viewOf(id) { const f = frames.get(id); return f && f.ready ? f.view : n
   });
   document.querySelectorAll('.stab2').forEach((b) => { b.onclick = () => setSide(b.dataset.side); });
   $('btn-report').onclick = exportReport;
+  $('btn-interactions').onclick = () => { dockTools('bottom'); setTab('changes'); Interactions.setRecording(true); };
   initSideSplitter();
   $('btn-msgs').onclick = () => showSide($('messages').hidden);
   setTab('smart');
